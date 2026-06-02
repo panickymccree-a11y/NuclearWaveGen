@@ -1,0 +1,13 @@
+rng_xorshift64.v
+rng_bank_10mcps.v
+poisson_time_multievent.v
+amp_lut_single_port.v
+amp_lut_multiport.v
+amplitude_sampler_icdf.v
+exp_decay_core.v
+noise_baseline_core.v
+mixer_saturator_simple.v
+event_counters_10mcps.v
+cfg_regfile_10mcps.v
+nuc_event_gen_10mcps_top.v
+nuc_event_gen_10mcps_io_top.v

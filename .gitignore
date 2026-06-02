@@ -1,0 +1,35 @@
+# Vivado generated state
+.Xil/
+*.jou
+*.log
+*.pb
+*.wdb
+*.wdf
+*.dcp
+*.rpx
+
+# Vivado project outputs
+prj/NuclearWaveGen.cache/
+prj/NuclearWaveGen.hw/
+prj/NuclearWaveGen.ip_user_files/
+prj/NuclearWaveGen.runs/
+prj/NuclearWaveGen.sim/
+prj/reports/
+prj/*.backup.*
+
+# ModelSim / simulation outputs
+work/
+sim/work/
+sim_out/
+*.wlf
+wlft*
+transcript
+sim/transcript
+sim/event_log.csv
+sim/analysis/*.png
+
+# Python cache and temporary files
+__pycache__/
+*.py[cod]
+*.tmp
+*.bak

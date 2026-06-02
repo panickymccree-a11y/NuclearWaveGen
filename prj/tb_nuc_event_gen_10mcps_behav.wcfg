@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="tb_nuc_event_gen_10mcps_behav.wdb" id="1">
+         <top_modules>
+            <top_module name="glbl" />
+            <top_module name="tb_nuc_event_gen_10mcps" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <zoom_setting>
+      <ZoomStartTime time="1121973392fs"></ZoomStartTime>
+      <ZoomEndTime time="1123831046fs"></ZoomEndTime>
+      <Cursor1Time time="1122371000fs"></Cursor1Time>
+   </zoom_setting>
+   <column_width_setting>
+      <NameColumnWidth column_width="190"></NameColumnWidth>
+      <ValueColumnWidth column_width="116"></ValueColumnWidth>
+   </column_width_setting>
+   <WVObjectSize size="44" />
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/clk" type="logic">
+      <obj_property name="ElementShortName">clk</obj_property>
+      <obj_property name="ObjectShortName">clk</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/rst_n" type="logic">
+      <obj_property name="ElementShortName">rst_n</obj_property>
+      <obj_property name="ObjectShortName">rst_n</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cfg_valid" type="logic">
+      <obj_property name="ElementShortName">cfg_valid</obj_property>
+      <obj_property name="ObjectShortName">cfg_valid</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cfg_write" type="logic">
+      <obj_property name="ElementShortName">cfg_write</obj_property>
+      <obj_property name="ObjectShortName">cfg_write</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cfg_addr" type="array">
+      <obj_property name="ElementShortName">cfg_addr[7:0]</obj_property>
+      <obj_property name="ObjectShortName">cfg_addr[7:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cfg_wdata" type="array">
+      <obj_property name="ElementShortName">cfg_wdata[31:0]</obj_property>
+      <obj_property name="ObjectShortName">cfg_wdata[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cfg_rdata" type="array">
+      <obj_property name="ElementShortName">cfg_rdata[31:0]</obj_property>
+      <obj_property name="ObjectShortName">cfg_rdata[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cfg_ready" type="logic">
+      <obj_property name="ElementShortName">cfg_ready</obj_property>
+      <obj_property name="ObjectShortName">cfg_ready</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/amp_lut_we" type="logic">
+      <obj_property name="ElementShortName">amp_lut_we</obj_property>
+      <obj_property name="ObjectShortName">amp_lut_we</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/amp_lut_addr" type="array">
+      <obj_property name="ElementShortName">amp_lut_addr[13:0]</obj_property>
+      <obj_property name="ObjectShortName">amp_lut_addr[13:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/amp_lut_wdata" type="array">
+      <obj_property name="ElementShortName">amp_lut_wdata[15:0]</obj_property>
+      <obj_property name="ObjectShortName">amp_lut_wdata[15:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/dac_sample_vec" type="array">
+      <obj_property name="ElementShortName">dac_sample_vec[31:0]</obj_property>
+      <obj_property name="ObjectShortName">dac_sample_vec[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/dac_sample_valid" type="logic">
+      <obj_property name="ElementShortName">dac_sample_valid</obj_property>
+      <obj_property name="ObjectShortName">dac_sample_valid</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/event_valid_vec" type="array">
+      <obj_property name="ElementShortName">event_valid_vec[1:0]</obj_property>
+      <obj_property name="ObjectShortName">event_valid_vec[1:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/impulse_valid_vec" type="array">
+      <obj_property name="ElementShortName">impulse_valid_vec[1:0]</obj_property>
+      <obj_property name="ObjectShortName">impulse_valid_vec[1:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/saturation_vec" type="array">
+      <obj_property name="ElementShortName">saturation_vec[1:0]</obj_property>
+      <obj_property name="ObjectShortName">saturation_vec[1:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/status_word" type="array">
+      <obj_property name="ElementShortName">status_word[31:0]</obj_property>
+      <obj_property name="ObjectShortName">status_word[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sample_lo" type="array">
+      <obj_property name="ElementShortName">sample_lo[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sample_lo[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sample_hi" type="array">
+      <obj_property name="ElementShortName">sample_hi[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sample_hi[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cand_lo" type="array">
+      <obj_property name="ElementShortName">cand_lo[31:0]</obj_property>
+      <obj_property name="ObjectShortName">cand_lo[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cand_hi" type="array">
+      <obj_property name="ElementShortName">cand_hi[31:0]</obj_property>
+      <obj_property name="ObjectShortName">cand_hi[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/emit_lo" type="array">
+      <obj_property name="ElementShortName">emit_lo[31:0]</obj_property>
+      <obj_property name="ObjectShortName">emit_lo[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/emit_hi" type="array">
+      <obj_property name="ElementShortName">emit_hi[31:0]</obj_property>
+      <obj_property name="ObjectShortName">emit_hi[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sat_lo" type="array">
+      <obj_property name="ElementShortName">sat_lo[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sat_lo[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sat_hi" type="array">
+      <obj_property name="ElementShortName">sat_hi[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sat_hi[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sample_lo_live" type="array">
+      <obj_property name="ElementShortName">sample_lo_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sample_lo_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sample_hi_live" type="array">
+      <obj_property name="ElementShortName">sample_hi_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sample_hi_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cand_lo_live" type="array">
+      <obj_property name="ElementShortName">cand_lo_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">cand_lo_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/cand_hi_live" type="array">
+      <obj_property name="ElementShortName">cand_hi_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">cand_hi_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/emit_lo_live" type="array">
+      <obj_property name="ElementShortName">emit_lo_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">emit_lo_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/emit_hi_live" type="array">
+      <obj_property name="ElementShortName">emit_hi_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">emit_hi_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sat_lo_live" type="array">
+      <obj_property name="ElementShortName">sat_lo_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sat_lo_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/sat_hi_live" type="array">
+      <obj_property name="ElementShortName">sat_hi_live[31:0]</obj_property>
+      <obj_property name="ObjectShortName">sat_hi_live[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/dac_lane0" type="array">
+      <obj_property name="ElementShortName">dac_lane0[15:0]</obj_property>
+      <obj_property name="ObjectShortName">dac_lane0[15:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/dac_lane1" type="array">
+      <obj_property name="ElementShortName">dac_lane1[15:0]</obj_property>
+      <obj_property name="ObjectShortName">dac_lane1[15:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/pulse_lane0" type="array">
+      <obj_property name="ElementShortName">pulse_lane0[31:0]</obj_property>
+      <obj_property name="ObjectShortName">pulse_lane0[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/pulse_lane1" type="array">
+      <obj_property name="ElementShortName">pulse_lane1[31:0]</obj_property>
+      <obj_property name="ObjectShortName">pulse_lane1[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/dac_sample_analog" type="array">
+      <obj_property name="ElementShortName">dac_sample_analog[15:0]</obj_property>
+      <obj_property name="ObjectShortName">dac_sample_analog[15:0]</obj_property>
+      <obj_property name="WaveformStyle">STYLE_ANALOG</obj_property>
+      <obj_property name="CellHeight">100</obj_property>
+      <obj_property name="AnalogYRangeMin">914</obj_property>
+      <obj_property name="AnalogYRRangeMax">14400</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/pulse_sample_analog" type="array">
+      <obj_property name="ElementShortName">pulse_sample_analog[31:0]</obj_property>
+      <obj_property name="ObjectShortName">pulse_sample_analog[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/SAMPLES_PER_CLK" type="array">
+      <obj_property name="ElementShortName">SAMPLES_PER_CLK[31:0]</obj_property>
+      <obj_property name="ObjectShortName">SAMPLES_PER_CLK[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/DAC_BITS" type="array">
+      <obj_property name="ElementShortName">DAC_BITS[31:0]</obj_property>
+      <obj_property name="ObjectShortName">DAC_BITS[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/PULSE_BITS" type="array">
+      <obj_property name="ElementShortName">PULSE_BITS[31:0]</obj_property>
+      <obj_property name="ObjectShortName">PULSE_BITS[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/ICDF_ADDR_BITS" type="array">
+      <obj_property name="ElementShortName">ICDF_ADDR_BITS[31:0]</obj_property>
+      <obj_property name="ObjectShortName">ICDF_ADDR_BITS[31:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/tb_nuc_event_gen_10mcps/AMP_BITS" type="array">
+      <obj_property name="ElementShortName">AMP_BITS[31:0]</obj_property>
+      <obj_property name="ObjectShortName">AMP_BITS[31:0]</obj_property>
+   </wvobject>
+</wave_config>
