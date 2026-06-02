@@ -41,9 +41,7 @@ module amplitude_sampler_icdf #(
     localparam integer PAIR_COUNT = (MAX_EVENTS_PER_SAMPLE + 1) / 2;
 
     reg [SAMPLES_PER_CLK-1:0] impulse_valid_pipe;
-    reg [SAMPLES_PER_CLK-1:0] impulse_valid_pipe2;
     reg [SAMPLES_PER_CLK*K_BITS-1:0] impulse_count_pipe;
-    reg [SAMPLES_PER_CLK*K_BITS-1:0] impulse_count_pipe2;
     reg [SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH-1:0] amp_pair_sum_d;
 
     genvar gi;
@@ -84,9 +82,7 @@ module amplitude_sampler_icdf #(
             fixed_amp_d       <= {AMP_BITS{1'b0}};
             rng_amp_d         <= {(SAMPLES_PER_CLK*RNG_BITS){1'b0}};
             impulse_valid_pipe <= {SAMPLES_PER_CLK{1'b0}};
-            impulse_valid_pipe2 <= {SAMPLES_PER_CLK{1'b0}};
             impulse_count_pipe <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
-            impulse_count_pipe2 <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             amp_pair_sum_d     <= {(SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH){1'b0}};
             impulse_valid_vec <= {SAMPLES_PER_CLK{1'b0}};
             impulse_count_vec <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
@@ -98,7 +94,6 @@ module amplitude_sampler_icdf #(
             amp_lut_en_d  <= amp_lut_en;
             fixed_amp_d   <= fixed_amp;
 
-            // ── Stage N: Pair accumulation ──
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
                 event_count_i = event_count_d[i*K_BITS +: K_BITS];
                 impulse_valid_pipe[i] <= event_valid_d[i];
@@ -126,12 +121,9 @@ module amplitude_sampler_icdf #(
                 end
             end
 
-            // ── Stage N+1: Total accumulation (reads registered pair sums) ──
-            impulse_valid_pipe2 <= impulse_valid_pipe;
-            impulse_count_pipe2 <= impulse_count_pipe;
-            impulse_valid_vec <= impulse_valid_pipe2;
+            impulse_valid_vec <= impulse_valid_pipe;
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
-                event_count_i = impulse_count_pipe2[i*K_BITS +: K_BITS];
+                event_count_i = impulse_count_pipe[i*K_BITS +: K_BITS];
                 impulse_count_vec[i*K_BITS +: K_BITS] <= event_count_i;
                 amp_total_acc = {ACC_WIDTH{1'b0}};
 
@@ -140,7 +132,7 @@ module amplitude_sampler_icdf #(
                         amp_pair_sum_d[(i*PAIR_COUNT+pair_idx)*ACC_WIDTH +: ACC_WIDTH];
                 end
 
-                if (impulse_valid_pipe2[i] && (event_count_i != {K_BITS{1'b0}})) begin
+                if (impulse_valid_pipe[i] && (event_count_i != {K_BITS{1'b0}})) begin
                     if (|amp_total_acc[ACC_WIDTH-1:IMP_BITS]) begin
                         impulse_sum_vec[i*IMP_BITS +: IMP_BITS] <= {IMP_BITS{1'b1}};
                     end else begin
@@ -154,9 +146,7 @@ module amplitude_sampler_icdf #(
             event_valid_d     <= {SAMPLES_PER_CLK{1'b0}};
             event_count_d     <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             impulse_valid_pipe <= {SAMPLES_PER_CLK{1'b0}};
-            impulse_valid_pipe2 <= {SAMPLES_PER_CLK{1'b0}};
             impulse_count_pipe <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
-            impulse_count_pipe2 <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             amp_pair_sum_d     <= {(SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH){1'b0}};
             impulse_valid_vec <= {SAMPLES_PER_CLK{1'b0}};
             impulse_count_vec <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
