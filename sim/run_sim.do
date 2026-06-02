@@ -8,6 +8,8 @@ vlib work
 # Compile RTL sources
 set rtl_dir "../rtl"
 
+vlog -work work -sv +acc multi_threshold_model.v
+
 vlog -work work -sv +acc \
     $rtl_dir/rng_xorshift64.v \
     $rtl_dir/rng_bank_10mcps.v \

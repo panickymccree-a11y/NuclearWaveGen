@@ -83,7 +83,8 @@ module poisson_time_multievent #(
     parameter integer SAMPLES_PER_CLK      = 2,
     parameter integer RNG_BITS             = 64,
     parameter integer K_BITS               = 3,
-    parameter integer MAX_EVENTS_PER_SAMPLE = 4
+    parameter integer MAX_EVENTS_PER_SAMPLE = 4,
+    parameter integer RATE_THRESHOLD_BITS   = 32
 ) (
     input  wire                                clk,
     input  wire                                rst_n,
@@ -117,22 +118,42 @@ module poisson_time_multievent #(
             assign threshold_ge4_q32 = 32'd0;
         end else begin : g_multi_event_thresholds
             // ── DSP pipeline registers with use_dsp attribute ──
-            (* use_dsp = "yes" *) reg [63:0]  lambda_sq_q64_s1;
-            (* use_dsp = "yes" *) reg [95:0]  lambda_cube_q96_s2;
-            (* use_dsp = "yes" *) reg [127:0] lambda_fourth_q128_s3;
+            localparam integer RATE_BITS_CLAMPED = (RATE_THRESHOLD_BITS < 1) ? 1 :
+                                                    (RATE_THRESHOLD_BITS > 32) ? 32 :
+                                                    RATE_THRESHOLD_BITS;
+            localparam integer MULT_LATENCY      = 18;
+            localparam integer MULT_WAIT_CYCLES  = MULT_LATENCY + 1;
 
-            // Extra pipeline stage (s4) to let DSP cascade settle before fabric reduction
-            (* use_dsp = "yes" *) reg [127:0] lambda_fourth_q128_s4;
+            localparam [2:0] THRESH_IDLE        = 3'd0;
+            localparam [2:0] THRESH_WAIT_SQ     = 3'd1;
+            localparam [2:0] THRESH_WAIT_CUBE   = 3'd2;
+            localparam [2:0] THRESH_WAIT_FOURTH = 3'd3;
+            localparam [2:0] THRESH_DIV         = 3'd4;
+            localparam [2:0] THRESH_WAIT_DIV    = 3'd5;
 
-            reg [31:0] rate_threshold_s1;
-            reg [31:0] rate_threshold_s2;
-            reg [31:0] rate_threshold_s3;
-            reg [31:0] rate_threshold_s4;
-            reg [63:0] lambda_sq_q64_s2;
-            reg [63:0] lambda_sq_q64_s3;
-            reg [63:0] lambda_sq_q64_s4;
-            reg [95:0] lambda_cube_q96_s3;
-            reg [95:0] lambda_cube_q96_s4;
+            reg [2:0] thresh_state;
+            reg       threshold_valid;
+
+            wire [RATE_BITS_CLAMPED-1:0] rate_threshold_limited;
+            wire [31:0] rate_threshold_limited_q32;
+            assign rate_threshold_limited = rate_threshold_q32[RATE_BITS_CLAMPED-1:0];
+            assign rate_threshold_limited_q32 =
+                {{(32-RATE_BITS_CLAMPED){1'b0}}, rate_threshold_limited};
+
+            reg [5:0]   mult_wait_count;
+            reg [63:0]  mult_a;
+            reg [63:0]  mult_b;
+            wire [127:0] mult_p;
+            reg [31:0]  calc_rate_threshold_q32;
+            reg [31:0]  active_rate_threshold_q32;
+
+            multi_threshold u_threshold_mult (
+                .CLK(clk),
+                .A(mult_a),
+                .B(mult_b),
+                .P(mult_p)
+            );
+
 
             // ── KEEP on threshold registers to prevent logic merging ──
             (* keep = "true" *) reg [31:0] threshold_ge1_q32_r;
@@ -178,19 +199,13 @@ module poisson_time_multievent #(
 
             always @(posedge clk or negedge rst_n) begin
                 if (!rst_n) begin
-                    rate_threshold_s1 <= 32'd0;
-                    rate_threshold_s2 <= 32'd0;
-                    rate_threshold_s3 <= 32'd0;
-                    rate_threshold_s4 <= 32'd0;
-                    lambda_sq_q64_s1  <= 64'd0;
-                    lambda_sq_q64_s2  <= 64'd0;
-                    lambda_sq_q64_s3  <= 64'd0;
-                    lambda_sq_q64_s4  <= 64'd0;
-                    lambda_cube_q96_s2 <= 96'd0;
-                    lambda_cube_q96_s3 <= 96'd0;
-                    lambda_cube_q96_s4 <= 96'd0;
-                    lambda_fourth_q128_s3 <= 128'd0;
-                    lambda_fourth_q128_s4 <= 128'd0;
+                    thresh_state <= THRESH_IDLE;
+                    threshold_valid <= 1'b0;
+                    mult_wait_count <= 6'd0;
+                    mult_a <= 64'd0;
+                    mult_b <= 64'd0;
+                    calc_rate_threshold_q32 <= 32'd0;
+                    active_rate_threshold_q32 <= 32'd0;
                     threshold_ge1_q32_r <= 32'd0;
                     threshold_ge2_q32_r <= 32'd0;
                     threshold_ge3_q32_r <= 32'd0;
@@ -205,44 +220,78 @@ module poisson_time_multievent #(
 
                     // ── 4-stage multiplier pipeline ──
                     // Stage s1: λ² multiply
-                    rate_threshold_s1 <= rate_threshold_q32;
-                    lambda_sq_q64_s1 <= {32'd0, rate_threshold_q32} *
-                                        {32'd0, rate_threshold_q32};
+                    case (thresh_state)
+                        THRESH_IDLE: begin
+                            if (!threshold_valid ||
+                                (rate_threshold_limited_q32 != active_rate_threshold_q32)) begin
+                                calc_rate_threshold_q32 <= rate_threshold_limited_q32;
+                                pending_threshold_ge1_q32 <= rate_threshold_limited_q32;
+                                mult_a <= {32'd0, rate_threshold_limited_q32};
+                                mult_b <= {32'd0, rate_threshold_limited_q32};
+                                mult_wait_count <= MULT_WAIT_CYCLES[5:0];
+                                thresh_state <= THRESH_WAIT_SQ;
+                            end
+                        end
 
                     // Stage s2: λ³ multiply
-                    rate_threshold_s2 <= rate_threshold_s1;
-                    lambda_sq_q64_s2 <= lambda_sq_q64_s1;
-                    lambda_cube_q96_s2 <= {32'd0, lambda_sq_q64_s1} *
-                                          {64'd0, rate_threshold_s1};
+                        THRESH_WAIT_SQ: begin
+                            if (mult_wait_count != 6'd0) begin
+                                mult_wait_count <= mult_wait_count - 6'd1;
+                            end else begin
+                                pending_threshold_ge2_q32 <= mult_p[64:33];
+                                mult_a <= mult_p[63:0];
+                                mult_b <= {32'd0, calc_rate_threshold_q32};
+                                mult_wait_count <= MULT_WAIT_CYCLES[5:0];
+                                thresh_state <= THRESH_WAIT_CUBE;
+                            end
+                        end
 
                     // Stage s3: λ⁴ multiply
-                    rate_threshold_s3 <= rate_threshold_s2;
-                    lambda_sq_q64_s3 <= lambda_sq_q64_s2;
-                    lambda_cube_q96_s3 <= lambda_cube_q96_s2;
-                    lambda_fourth_q128_s3 <= {32'd0, lambda_cube_q96_s2} *
-                                             {96'd0, rate_threshold_s2};
+                        THRESH_WAIT_CUBE: begin
+                            if (mult_wait_count != 6'd0) begin
+                                mult_wait_count <= mult_wait_count - 6'd1;
+                            end else begin
+                                pending_div6_dividend <= mult_p[95:64];
+                                mult_a <= {32'd0, mult_p[95:64]};
+                                mult_b <= {32'd0, calc_rate_threshold_q32};
+                                mult_wait_count <= MULT_WAIT_CYCLES[5:0];
+                                thresh_state <= THRESH_WAIT_FOURTH;
+                            end
+                        end
 
                     // Stage s4: Extra pipeline stage for DSP cascade settling
-                    rate_threshold_s4 <= rate_threshold_s3;
-                    lambda_sq_q64_s4 <= lambda_sq_q64_s3;
-                    lambda_cube_q96_s4 <= lambda_cube_q96_s3;
-                    lambda_fourth_q128_s4 <= lambda_fourth_q128_s3;
+                        THRESH_WAIT_FOURTH: begin
+                            if (mult_wait_count != 6'd0) begin
+                                mult_wait_count <= mult_wait_count - 6'd1;
+                            end else begin
+                                pending_div24_dividend <= mult_p[63:32];
+                                thresh_state <= THRESH_DIV;
+                            end
+                        end
 
-                    // Divider trigger: use s4 stage values
-                    if (!div6_busy && !div24_busy && !div6_done && !div24_done) begin
-                        pending_threshold_ge1_q32 <= rate_threshold_s4;
-                        pending_threshold_ge2_q32 <= lambda_sq_q64_s4 >> 33;
-                        pending_div6_dividend     <= lambda_cube_q96_s4[95:64];
-                        pending_div24_dividend    <= lambda_fourth_q128_s4[127:96];
-                        div_start                 <= 1'b1;
-                    end
+                        THRESH_DIV: begin
+                            if (!div6_busy && !div24_busy) begin
+                                div_start                 <= 1'b1;
+                                thresh_state              <= THRESH_WAIT_DIV;
+                            end
+                        end
 
-                    if (div6_done && div24_done) begin
-                        threshold_ge1_q32_r <= pending_threshold_ge1_q32;
-                        threshold_ge2_q32_r <= pending_threshold_ge2_q32;
-                        threshold_ge3_q32_r <= div6_quotient;
-                        threshold_ge4_q32_r <= div24_quotient;
-                    end
+                        THRESH_WAIT_DIV: begin
+                            if (div6_done && div24_done) begin
+                                threshold_ge1_q32_r <= pending_threshold_ge1_q32;
+                                threshold_ge2_q32_r <= pending_threshold_ge2_q32;
+                                threshold_ge3_q32_r <= div6_quotient;
+                                threshold_ge4_q32_r <= div24_quotient;
+                                active_rate_threshold_q32 <= pending_threshold_ge1_q32;
+                                threshold_valid <= 1'b1;
+                                thresh_state <= THRESH_IDLE;
+                            end
+                        end
+
+                        default: begin
+                            thresh_state <= THRESH_IDLE;
+                        end
+                    endcase
                 end
             end
 

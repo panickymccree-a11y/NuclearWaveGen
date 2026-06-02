@@ -74,7 +74,7 @@ module tb_nuc_event_gen_10mcps;
     reg [PULSE_BITS-1:0] pulse_sample_analog;
     integer obs_i;
 
-    // ── Poisson verification event log ────────────────────────────
+    // Poisson verification event log
     integer        fd_event_log;
     reg [63:0]     log_cycle;
 
@@ -158,7 +158,7 @@ module tb_nuc_event_gen_10mcps;
         end
     end
 
-    // ── Event log writer: one CSV row per clock when run_enable=1 ──
+    // Event log writer: one CSV row per clock when run_enable=1
     // Format: cycle,lane0_event_count,lane1_event_count
     always @(posedge clk) begin
         if (rst_n && dut.run_enable) begin

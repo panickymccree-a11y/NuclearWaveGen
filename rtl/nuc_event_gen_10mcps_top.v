@@ -6,7 +6,7 @@
 module nuc_event_gen_10mcps_top #(
     parameter integer SAMPLES_PER_CLK       = 2,
     parameter integer CORE_CLK_HZ           = 250000000,
-    parameter integer MAX_RATE_CPS          = 1000000,
+    parameter integer MAX_RATE_CPS          = 10000000,
     parameter integer RNG_BITS              = 64,
     parameter integer DAC_BITS              = 16,
     parameter integer AMP_BITS              = 16,
@@ -52,6 +52,20 @@ module nuc_event_gen_10mcps_top #(
     output wire [SAMPLES_PER_CLK-1:0]          saturation_vec,
     output wire [31:0]                         status_word
 );
+
+    function integer bit_width_u32;
+        input [31:0] value;
+        integer bit_idx;
+        begin
+            bit_width_u32 = 1;
+            for (bit_idx = 0; bit_idx < 32; bit_idx = bit_idx + 1) begin
+                if (value[bit_idx])
+                    bit_width_u32 = bit_idx + 1;
+            end
+        end
+    endfunction
+
+    localparam integer RATE_THRESHOLD_BITS = bit_width_u32(MAX_RATE_THRESHOLD_Q32);
 
     wire        run_enable;
     wire        soft_reset_pulse;
@@ -162,7 +176,8 @@ module nuc_event_gen_10mcps_top #(
         .SAMPLES_PER_CLK(SAMPLES_PER_CLK),
         .RNG_BITS(RNG_BITS),
         .K_BITS(K_BITS),
-        .MAX_EVENTS_PER_SAMPLE(MAX_EVENTS_PER_SAMPLE)
+        .MAX_EVENTS_PER_SAMPLE(MAX_EVENTS_PER_SAMPLE),
+        .RATE_THRESHOLD_BITS(RATE_THRESHOLD_BITS)
     ) u_timebase (
         .clk(clk),
         .rst_n(rst_n),
