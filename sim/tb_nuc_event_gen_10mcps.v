@@ -48,27 +48,27 @@ module tb_nuc_event_gen_10mcps;
     reg [31:0] multi_event_inc;
     reg [31:0] event_total_inc;
 
-    wire [31:0] sample_lo_live = dut.sample_count[31:0];
-    wire [31:0] sample_hi_live = dut.sample_count[63:32];
-    wire [31:0] cand_lo_live   = dut.candidate_count[31:0];
-    wire [31:0] cand_hi_live   = dut.candidate_count[63:32];
-    wire [31:0] emit_lo_live   = dut.emitted_count[31:0];
-    wire [31:0] emit_hi_live   = dut.emitted_count[63:32];
-    wire [31:0] sat_lo_live    = dut.saturation_count[31:0];
-    wire [31:0] sat_hi_live    = dut.saturation_count[63:32];
+    wire [31:0] sample_lo_live = dut.u_core.sample_count[31:0];
+    wire [31:0] sample_hi_live = dut.u_core.sample_count[63:32];
+    wire [31:0] cand_lo_live   = dut.u_core.candidate_count[31:0];
+    wire [31:0] cand_hi_live   = dut.u_core.candidate_count[63:32];
+    wire [31:0] emit_lo_live   = dut.u_core.emitted_count[31:0];
+    wire [31:0] emit_hi_live   = dut.u_core.emitted_count[63:32];
+    wire [31:0] sat_lo_live    = dut.u_core.saturation_count[31:0];
+    wire [31:0] sat_hi_live    = dut.u_core.saturation_count[63:32];
 
     wire [DAC_BITS-1:0] dac_lane0 = dac_sample_vec[0*DAC_BITS +: DAC_BITS];
     wire [DAC_BITS-1:0] dac_lane1 = dac_sample_vec[1*DAC_BITS +: DAC_BITS];
-    wire [PULSE_BITS-1:0] pulse_lane0 = dut.pulse_vec[0*PULSE_BITS +: PULSE_BITS];
-    wire [PULSE_BITS-1:0] pulse_lane1 = dut.pulse_vec[1*PULSE_BITS +: PULSE_BITS];
-    wire [K_BITS-1:0] event_count_lane0 = dut.event_count_vec[0*K_BITS +: K_BITS];
-    wire [K_BITS-1:0] event_count_lane1 = dut.event_count_vec[1*K_BITS +: K_BITS];
-    wire [K_BITS-1:0] impulse_count_lane0 = dut.impulse_count_vec[0*K_BITS +: K_BITS];
-    wire [K_BITS-1:0] impulse_count_lane1 = dut.impulse_count_vec[1*K_BITS +: K_BITS];
-    wire [IMP_BITS-1:0] impulse_sum_lane0 = dut.impulse_sum_vec[0*IMP_BITS +: IMP_BITS];
-    wire [IMP_BITS-1:0] impulse_sum_lane1 = dut.impulse_sum_vec[1*IMP_BITS +: IMP_BITS];
-    wire signed [NOISE_BITS-1:0] noise_lane0 = dut.noise_vec[0*NOISE_BITS +: NOISE_BITS];
-    wire signed [NOISE_BITS-1:0] noise_lane1 = dut.noise_vec[1*NOISE_BITS +: NOISE_BITS];
+    wire [PULSE_BITS-1:0] pulse_lane0 = dut.u_core.pulse_vec[0*PULSE_BITS +: PULSE_BITS];
+    wire [PULSE_BITS-1:0] pulse_lane1 = dut.u_core.pulse_vec[1*PULSE_BITS +: PULSE_BITS];
+    wire [K_BITS-1:0] event_count_lane0 = dut.u_core.event_count_vec[0*K_BITS +: K_BITS];
+    wire [K_BITS-1:0] event_count_lane1 = dut.u_core.event_count_vec[1*K_BITS +: K_BITS];
+    wire [K_BITS-1:0] impulse_count_lane0 = dut.u_core.impulse_count_vec[0*K_BITS +: K_BITS];
+    wire [K_BITS-1:0] impulse_count_lane1 = dut.u_core.impulse_count_vec[1*K_BITS +: K_BITS];
+    wire [IMP_BITS-1:0] impulse_sum_lane0 = dut.u_core.impulse_sum_vec[0*IMP_BITS +: IMP_BITS];
+    wire [IMP_BITS-1:0] impulse_sum_lane1 = dut.u_core.impulse_sum_vec[1*IMP_BITS +: IMP_BITS];
+    wire signed [NOISE_BITS-1:0] noise_lane0 = dut.u_core.noise_vec[0*NOISE_BITS +: NOISE_BITS];
+    wire signed [NOISE_BITS-1:0] noise_lane1 = dut.u_core.noise_vec[1*NOISE_BITS +: NOISE_BITS];
 
     reg [DAC_BITS-1:0]   dac_sample_analog;
     reg [PULSE_BITS-1:0] pulse_sample_analog;
@@ -78,9 +78,12 @@ module tb_nuc_event_gen_10mcps;
     integer        fd_event_log;
     reg [63:0]     log_cycle;
 
-    nuc_event_gen_10mcps_top #(
+    nuc_event_gen_10mcps_io_top #(
         .SAMPLES_PER_CLK(SAMPLES_PER_CLK),
         .DAC_BITS(DAC_BITS),
+        .AMP_BITS(AMP_BITS),
+        .IMP_BITS(IMP_BITS),
+        .PULSE_BITS(PULSE_BITS),
         .ICDF_ADDR_BITS(ICDF_ADDR_BITS)
     ) dut (
         .clk(clk),
@@ -95,12 +98,13 @@ module tb_nuc_event_gen_10mcps;
         .amp_lut_addr(amp_lut_addr),
         .amp_lut_wdata(amp_lut_wdata),
         .dac_sample_vec(dac_sample_vec),
-        .dac_sample_valid(dac_sample_valid),
-        .event_valid_vec(event_valid_vec),
-        .impulse_valid_vec(impulse_valid_vec),
-        .saturation_vec(saturation_vec),
-        .status_word(status_word)
+        .dac_sample_valid(dac_sample_valid)
     );
+
+    assign event_valid_vec   = dut.u_core.event_valid_vec;
+    assign impulse_valid_vec = dut.u_core.impulse_valid_vec;
+    assign saturation_vec    = dut.u_core.saturation_vec;
+    assign status_word       = dut.u_core.status_word;
 
     initial begin
         clk = 1'b0;
@@ -138,18 +142,18 @@ module tb_nuc_event_gen_10mcps;
             observed_occupied_lanes    <= 32'd0;
             observed_multi_event_lanes <= 32'd0;
             observed_event_total       <= 32'd0;
-        end else if (dut.run_enable) begin
+        end else if (dut.u_core.run_enable) begin
             occupied_inc    = 32'd0;
             multi_event_inc = 32'd0;
             event_total_inc = 32'd0;
 
             for (obs_i = 0; obs_i < SAMPLES_PER_CLK; obs_i = obs_i + 1) begin
-                if (dut.event_count_vec[obs_i*K_BITS +: K_BITS] != 0)
+                if (dut.u_core.event_count_vec[obs_i*K_BITS +: K_BITS] != 0)
                     occupied_inc = occupied_inc + 1;
-                if (dut.event_count_vec[obs_i*K_BITS +: K_BITS] > 1)
+                if (dut.u_core.event_count_vec[obs_i*K_BITS +: K_BITS] > 1)
                     multi_event_inc = multi_event_inc + 1;
                 event_total_inc = event_total_inc +
-                    dut.event_count_vec[obs_i*K_BITS +: K_BITS];
+                    dut.u_core.event_count_vec[obs_i*K_BITS +: K_BITS];
             end
 
             observed_occupied_lanes    <= observed_occupied_lanes + occupied_inc;
@@ -161,7 +165,7 @@ module tb_nuc_event_gen_10mcps;
     // Event log writer: one CSV row per clock when run_enable=1
     // Format: cycle,lane0_event_count,lane1_event_count
     always @(posedge clk) begin
-        if (rst_n && dut.run_enable) begin
+        if (rst_n && dut.u_core.run_enable) begin
             $fwrite(fd_event_log, "%0d,%0d,%0d\n",
                     log_cycle,
                     event_count_lane0,
