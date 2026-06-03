@@ -8,6 +8,12 @@
 //   state = state + (impulse << FRAC_BITS)
 //   pulse = state >> output_shift
 //   state = state - (state >> decay_shift)
+//
+// PIPELINE: 2-stage architecture to meet 250 MHz timing on Artix-7.
+//   Stage 1: decay + accumulate per lane → pulse_state_vec_d, decay_state
+//   Stage 2: saturation check on registered pulse_state_pipe → pulse_vec
+// The extra pipeline register breaks the 48-bit carry chain between
+// the accumulate loop and the saturation reduction-OR.
 module exp_decay_core #(
     parameter integer SAMPLES_PER_CLK = 2,
     parameter integer IMP_BITS        = 24,
@@ -43,30 +49,43 @@ module exp_decay_core #(
     reg                 pulse_overflow_next;
     wire [4:0]          decay_shift_eff;
 
+    // Pipeline registers: break carry chain between accumulate and saturation
+    reg [SAMPLES_PER_CLK*ACC_BITS-1:0] pulse_state_pipe;
+    reg [4:0]                          output_shift_pipe;
+    reg                                enable_pipe;
+    reg                                overflow_pipe;
+
     integer i;
 
     assign decay_shift_eff = (FIXED_DECAY_SHIFT != 5'd0) ?
                              FIXED_DECAY_SHIFT : decay_shift;
 
+    // ── Stage 1: Decay + accumulate ──
+    // Computes per-lane next_state and updates decay_state.
+    // Results are registered in pulse_state_vec_d (for debug visibility)
+    // and fed to Stage 2 via pulse_state_pipe.
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             decay_state    <= {ACC_BITS{1'b0}};
-            pulse_vec      <= {(SAMPLES_PER_CLK*PULSE_BITS){1'b0}};
             impulse_ext_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
             pulse_state_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
             output_shift_d <= 5'd0;
-            state_overflow <= 1'b0;
+            pulse_state_pipe <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
+            output_shift_pipe <= 5'd0;
+            enable_pipe <= 1'b0;
+            overflow_pipe <= 1'b0;
         end else if (clear) begin
             decay_state    <= {ACC_BITS{1'b0}};
-            pulse_vec      <= {(SAMPLES_PER_CLK*PULSE_BITS){1'b0}};
             impulse_ext_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
             pulse_state_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
             output_shift_d <= 5'd0;
-            state_overflow <= 1'b0;
+            pulse_state_pipe <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
+            output_shift_pipe <= 5'd0;
+            enable_pipe <= 1'b0;
+            overflow_pipe <= 1'b0;
         end else if (enable) begin
             work_state = decay_state;
             overflow_next = 1'b0;
-            pulse_overflow_next = 1'b0;
 
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
                 if (impulse_valid_vec[i]) begin
@@ -105,8 +124,39 @@ module exp_decay_core #(
                 end
             end
 
+            decay_state <= work_state;
+            output_shift_d <= output_shift;
+
+            // Pipeline register: capture stage-1 results for stage-2
+            pulse_state_pipe <= pulse_state_vec_d;
+            output_shift_pipe <= output_shift_d;
+            enable_pipe <= 1'b1;
+            overflow_pipe <= overflow_next;
+        end else begin
+            impulse_ext_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
+            pulse_state_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
+            pulse_state_pipe <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
+            enable_pipe <= 1'b0;
+            overflow_pipe <= 1'b0;
+        end
+    end
+
+    // ── Stage 2: Saturation check and pulse output ──
+    // Uses registered pulse_state_pipe to break the carry chain
+    // from the accumulate loop. This isolates the 48-bit reduction-OR
+    // from the decay_state → decay_state feedback path.
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            pulse_vec      <= {(SAMPLES_PER_CLK*PULSE_BITS){1'b0}};
+            state_overflow <= 1'b0;
+        end else if (clear) begin
+            pulse_vec      <= {(SAMPLES_PER_CLK*PULSE_BITS){1'b0}};
+            state_overflow <= 1'b0;
+        end else if (enable_pipe) begin
+            pulse_overflow_next = 1'b0;
+
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
-                scaled_state = pulse_state_vec_d[i*ACC_BITS +: ACC_BITS] >> output_shift_d;
+                scaled_state = pulse_state_pipe[i*ACC_BITS +: ACC_BITS] >> output_shift_pipe;
                 if (|scaled_state[ACC_BITS-1:PULSE_BITS]) begin
                     pulse_vec[i*PULSE_BITS +: PULSE_BITS] <= {PULSE_BITS{1'b1}};
                     pulse_overflow_next = 1'b1;
@@ -115,13 +165,9 @@ module exp_decay_core #(
                 end
             end
 
-            decay_state <= work_state;
-            output_shift_d <= output_shift;
-            state_overflow <= overflow_next | pulse_overflow_next;
+            state_overflow <= overflow_pipe | pulse_overflow_next;
         end else begin
             pulse_vec <= {(SAMPLES_PER_CLK*PULSE_BITS){1'b0}};
-            impulse_ext_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
-            pulse_state_vec_d <= {(SAMPLES_PER_CLK*ACC_BITS){1'b0}};
         end
     end
 

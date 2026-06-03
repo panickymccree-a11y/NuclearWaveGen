@@ -3,6 +3,10 @@
 // Random amplitude sampler.
 // amp_lut_en=0: all events use fixed_amp.
 // amp_lut_en=1: events use ICDF LUT addressed by independent amplitude RNG.
+//
+// PIPELINE: BRAM read data is registered (icdf_rd_data_d) to break the
+// BRAM Tco (~2.1ns on Artix-7) out of the amp_pair_sum accumulation path.
+// Control signals are delayed to match.
 module amplitude_sampler_icdf #(
     parameter integer SAMPLES_PER_CLK = 2,
     parameter integer RNG_BITS        = 64,
@@ -36,6 +40,14 @@ module amplitude_sampler_icdf #(
     // Pipeline register for rng_amp to align with delayed event signals
     // (event_valid_vec/event_count_vec are now registered in poisson_time_multievent)
     reg [SAMPLES_PER_CLK*RNG_BITS-1:0] rng_amp_d;
+
+    // ── Pipeline stage for BRAM read data ──
+    // Registers the BRAM output to break the RAMB36 Tco from the accumulation path
+    reg [AMP_READ_PORTS*AMP_BITS-1:0]        icdf_rd_data_d;
+    reg [SAMPLES_PER_CLK-1:0]                event_valid_d2;
+    reg [SAMPLES_PER_CLK*K_BITS-1:0]         event_count_d2;
+    reg                                      amp_lut_en_d2;
+    reg [AMP_BITS-1:0]                       fixed_amp_d2;
 
     localparam integer ACC_WIDTH  = IMP_BITS + 8;
     localparam integer PAIR_COUNT = (MAX_EVENTS_PER_SAMPLE + 1) / 2;
@@ -81,6 +93,13 @@ module amplitude_sampler_icdf #(
             amp_lut_en_d      <= 1'b0;
             fixed_amp_d       <= {AMP_BITS{1'b0}};
             rng_amp_d         <= {(SAMPLES_PER_CLK*RNG_BITS){1'b0}};
+            // Pipeline stage for BRAM data
+            icdf_rd_data_d    <= {(AMP_READ_PORTS*AMP_BITS){1'b0}};
+            event_valid_d2    <= {SAMPLES_PER_CLK{1'b0}};
+            event_count_d2    <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
+            amp_lut_en_d2     <= 1'b0;
+            fixed_amp_d2      <= {AMP_BITS{1'b0}};
+            // Output pipeline
             impulse_valid_pipe <= {SAMPLES_PER_CLK{1'b0}};
             impulse_count_pipe <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             amp_pair_sum_d     <= {(SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH){1'b0}};
@@ -94,9 +113,17 @@ module amplitude_sampler_icdf #(
             amp_lut_en_d  <= amp_lut_en;
             fixed_amp_d   <= fixed_amp;
 
+            // ── BRAM data pipeline register ──
+            // Breaks the RAMB36 Tco from the amp_pair_sum accumulation path
+            icdf_rd_data_d <= icdf_rd_data_vec;
+            event_valid_d2 <= event_valid_d;
+            event_count_d2 <= event_count_d;
+            amp_lut_en_d2  <= amp_lut_en_d;
+            fixed_amp_d2   <= fixed_amp_d;
+
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
-                event_count_i = event_count_d[i*K_BITS +: K_BITS];
-                impulse_valid_pipe[i] <= event_valid_d[i];
+                event_count_i = event_count_d2[i*K_BITS +: K_BITS];
+                impulse_valid_pipe[i] <= event_valid_d2[i];
                 impulse_count_pipe[i*K_BITS +: K_BITS] <= event_count_i;
 
                 for (pair_idx = 0; pair_idx < PAIR_COUNT; pair_idx = pair_idx + 1) begin
@@ -105,14 +132,14 @@ module amplitude_sampler_icdf #(
                     for (j = 0; j < 2; j = j + 1) begin
                         slot_idx = pair_idx * 2 + j;
                         if ((slot_idx < MAX_EVENTS_PER_SAMPLE) &&
-                            event_valid_d[i] && (slot_idx < event_count_i)) begin
-                            if (amp_lut_en_d) begin
+                            event_valid_d2[i] && (slot_idx < event_count_i)) begin
+                            if (amp_lut_en_d2) begin
                                 amp_pair_acc = amp_pair_acc +
                                     {{(ACC_WIDTH-AMP_BITS){1'b0}},
-                                     icdf_rd_data_vec[(i*MAX_EVENTS_PER_SAMPLE+slot_idx)*AMP_BITS +: AMP_BITS]};
+                                     icdf_rd_data_d[(i*MAX_EVENTS_PER_SAMPLE+slot_idx)*AMP_BITS +: AMP_BITS]};
                             end else begin
                                 amp_pair_acc = amp_pair_acc +
-                                    {{(ACC_WIDTH-AMP_BITS){1'b0}}, fixed_amp_d};
+                                    {{(ACC_WIDTH-AMP_BITS){1'b0}}, fixed_amp_d2};
                             end
                         end
                     end
@@ -145,6 +172,9 @@ module amplitude_sampler_icdf #(
         end else begin
             event_valid_d     <= {SAMPLES_PER_CLK{1'b0}};
             event_count_d     <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
+            icdf_rd_data_d    <= {(AMP_READ_PORTS*AMP_BITS){1'b0}};
+            event_valid_d2    <= {SAMPLES_PER_CLK{1'b0}};
+            event_count_d2    <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             impulse_valid_pipe <= {SAMPLES_PER_CLK{1'b0}};
             impulse_count_pipe <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             amp_pair_sum_d     <= {(SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH){1'b0}};

@@ -8,12 +8,15 @@ vlib work
 # Compile RTL sources
 set rtl_dir "../rtl"
 
-vlog -work work -sv +acc multi_threshold_model.v
+vlog -work work -sv +acc +define+SIMULATION multi_threshold_model.v
 
-vlog -work work -sv +acc \
+vlog -work work -sv +acc +define+SIMULATION clk_wiz_0_model.v
+
+vlog -work work -sv +acc +define+SIMULATION \
     $rtl_dir/rng_xorshift64.v \
     $rtl_dir/rng_bank_10mcps.v \
     $rtl_dir/amp_lut_single_port.v \
+    $rtl_dir/amp_lut_dual_read_port.v \
     $rtl_dir/amp_lut_multiport.v \
     $rtl_dir/cfg_regfile_10mcps.v \
     $rtl_dir/poisson_time_bernoulli.v \
@@ -24,10 +27,12 @@ vlog -work work -sv +acc \
     $rtl_dir/noise_baseline_core.v \
     $rtl_dir/mixer_saturator_simple.v \
     $rtl_dir/nuc_event_gen_10mcps_top.v \
+    $rtl_dir/nuc_event_gen_dac_channel.v \
+    $rtl_dir/dac_2x_output_serializer.v \
     $rtl_dir/nuc_event_gen_10mcps_io_top.v
 
 # Compile testbench
-vlog -work work -sv +acc tb_nuc_event_gen_10mcps.v
+vlog -work work -sv +acc +define+SIMULATION tb_nuc_event_gen_10mcps.v
 
 # Load and run
 vsim -voptargs="+acc" work.tb_nuc_event_gen_10mcps

@@ -1,93 +1,114 @@
 `timescale 1ns/1ps
 
-// Physical IO wrapper for implementation. Debug/status outputs stay inside
-// the core and remain readable through cfg_rdata when needed.
-module nuc_event_gen_10mcps_io_top #(
-    parameter integer SAMPLES_PER_CLK       = 2,
-    parameter integer CORE_CLK_HZ           = 250000000,
-    parameter integer MAX_RATE_CPS          = 10000000,
-    parameter integer RNG_BITS              = 64,
-    parameter integer DAC_BITS              = 16,
-    parameter integer AMP_BITS              = 16,
-    parameter integer IMP_BITS              = 24,
-    parameter integer ACC_BITS              = 48,
-    parameter integer PULSE_BITS            = 32,
-    parameter integer ICDF_ADDR_BITS        = 14,
-    parameter integer K_BITS                = 3,
-    parameter integer NOISE_BITS            = 16,
-    parameter integer FRAC_BITS             = 12,
-    parameter [4:0]  DEFAULT_DECAY_SHIFT    = 5'd8,
-    parameter [4:0]  DEFAULT_OUTPUT_SHIFT   = 5'd12,
-    parameter [4:0]  DEFAULT_NOISE_SHIFT    = 5'd8,
-    parameter integer MAX_EVENTS_PER_SAMPLE = 4,
-    parameter integer DECAY_BEFORE_ACCUMULATE = 0,
-    parameter [4:0]  FIXED_DECAY_SHIFT      = 5'd0,
-    parameter integer ENABLE_STATE_OVERFLOW = 1,
-    parameter integer ENABLE_STATUS_COUNTERS = 1
-) (
-    input  wire                                clk,
-    input  wire                                rst_n,
-
-    input  wire                                cfg_valid,
-    input  wire                                cfg_write,
-    input  wire [7:0]                          cfg_addr,
-    input  wire [31:0]                         cfg_wdata,
-    output wire [31:0]                         cfg_rdata,
-    output wire                                cfg_ready,
-
-    input  wire                                amp_lut_we,
-    input  wire [ICDF_ADDR_BITS-1:0]           amp_lut_addr,
-    input  wire [AMP_BITS-1:0]                 amp_lut_wdata,
-
-    output wire [SAMPLES_PER_CLK*DAC_BITS-1:0] dac_sample_vec,
-    output wire                                dac_sample_valid
+// Physical top for AD9747 dual-port operation.
+// R4 provides a 50 MHz reference clock. clk_wiz_0 generates 125 MHz for
+// waveform generation and 250 MHz for the AD9747 data/clock output stage.
+module nuc_event_gen_10mcps_io_top (
+    input  wire                  clk_50m,
+    input  wire                  rst_n,
+    output wire                  dac_clk_p,
+    output wire                  dac_clk_n,
+    output wire [15:0]           dac1_data,
+    output wire [15:0]           dac2_data
 );
 
-    wire [SAMPLES_PER_CLK-1:0] event_valid_unused;
-    wire [SAMPLES_PER_CLK-1:0] impulse_valid_unused;
-    wire [SAMPLES_PER_CLK-1:0] saturation_unused;
-    wire [31:0]                status_unused;
+    localparam integer DAC_BITS = 16;
 
-    nuc_event_gen_10mcps_top #(
-        .SAMPLES_PER_CLK(SAMPLES_PER_CLK),
-        .CORE_CLK_HZ(CORE_CLK_HZ),
-        .MAX_RATE_CPS(MAX_RATE_CPS),
-        .RNG_BITS(RNG_BITS),
-        .DAC_BITS(DAC_BITS),
-        .AMP_BITS(AMP_BITS),
-        .IMP_BITS(IMP_BITS),
-        .ACC_BITS(ACC_BITS),
-        .PULSE_BITS(PULSE_BITS),
-        .ICDF_ADDR_BITS(ICDF_ADDR_BITS),
-        .K_BITS(K_BITS),
-        .NOISE_BITS(NOISE_BITS),
-        .FRAC_BITS(FRAC_BITS),
-        .DEFAULT_DECAY_SHIFT(DEFAULT_DECAY_SHIFT),
-        .DEFAULT_OUTPUT_SHIFT(DEFAULT_OUTPUT_SHIFT),
-        .DEFAULT_NOISE_SHIFT(DEFAULT_NOISE_SHIFT),
-        .MAX_EVENTS_PER_SAMPLE(MAX_EVENTS_PER_SAMPLE),
-        .DECAY_BEFORE_ACCUMULATE(DECAY_BEFORE_ACCUMULATE),
-        .FIXED_DECAY_SHIFT(FIXED_DECAY_SHIFT),
-        .ENABLE_STATE_OVERFLOW(ENABLE_STATE_OVERFLOW),
-        .ENABLE_STATUS_COUNTERS(ENABLE_STATUS_COUNTERS)
-    ) u_core (
-        .clk(clk),
-        .rst_n(rst_n),
-        .cfg_valid(cfg_valid),
-        .cfg_write(cfg_write),
-        .cfg_addr(cfg_addr),
-        .cfg_wdata(cfg_wdata),
-        .cfg_rdata(cfg_rdata),
-        .cfg_ready(cfg_ready),
-        .amp_lut_we(amp_lut_we),
-        .amp_lut_addr(amp_lut_addr),
-        .amp_lut_wdata(amp_lut_wdata),
-        .dac_sample_vec(dac_sample_vec),
-        .dac_sample_valid(dac_sample_valid),
-        .event_valid_vec(event_valid_unused),
-        .impulse_valid_vec(impulse_valid_unused),
-        .saturation_vec(saturation_unused),
-        .status_word(status_unused)
+    wire clk_125m;
+    wire clk_250m;
+    wire clk_locked;
+
+    reg [2:0] rst_125_sync;
+    reg [2:0] rst_250_sync;
+
+    wire rst_mmcm = ~rst_n;
+    wire rst_125_n = rst_125_sync[2];
+    wire rst_250_n = rst_250_sync[2];
+
+    wire [2*DAC_BITS-1:0] ch1_sample_pair;
+    wire [2*DAC_BITS-1:0] ch2_sample_pair;
+    wire ch1_sample_valid;
+    wire ch2_sample_valid;
+    wire ch1_sample_toggle;
+    wire ch2_sample_toggle;
+    wire sample_valid = ch1_sample_valid & ch2_sample_valid;
+    wire channels_enabled = rst_125_n;
+
+    clk_wiz_0 u_clk_wiz (
+        .clk_125M(clk_125m),
+        .clk_250M(clk_250m),
+        .reset(rst_mmcm),
+        .locked(clk_locked),
+        .clk_in1(clk_50m)
     );
+
+    always @(posedge clk_125m or negedge rst_n) begin
+        if (!rst_n) begin
+            rst_125_sync <= 3'b000;
+        end else if (!clk_locked) begin
+            rst_125_sync <= 3'b000;
+        end else begin
+            rst_125_sync <= {rst_125_sync[1:0], 1'b1};
+        end
+    end
+
+    always @(posedge clk_250m or negedge rst_n) begin
+        if (!rst_n) begin
+            rst_250_sync <= 3'b000;
+        end else if (!clk_locked) begin
+            rst_250_sync <= 3'b000;
+        end else begin
+            rst_250_sync <= {rst_250_sync[1:0], 1'b1};
+        end
+    end
+
+    nuc_event_gen_dac_channel #(
+        .RNG_SEED_SALT(64'h0000_0000_0000_0001)
+    ) u_dac1_channel (
+        .clk_125m(clk_125m),
+        .rst_n(rst_125_n),
+        .enable(channels_enabled),
+        .sample_pair(ch1_sample_pair),
+        .sample_valid(ch1_sample_valid),
+        .sample_toggle(ch1_sample_toggle)
+    );
+
+    nuc_event_gen_dac_channel #(
+        .RNG_SEED_SALT(64'h0000_0000_0000_1001)
+    ) u_dac2_channel (
+        .clk_125m(clk_125m),
+        .rst_n(rst_125_n),
+        .enable(channels_enabled),
+        .sample_pair(ch2_sample_pair),
+        .sample_valid(ch2_sample_valid),
+        .sample_toggle(ch2_sample_toggle)
+    );
+
+    dac_2x_output_serializer #(
+        .DAC_BITS(DAC_BITS)
+    ) u_output_serializer (
+        .clk_125m(clk_125m),
+        .rst_125_n(rst_125_n),
+        .clk_250m(clk_250m),
+        .rst_250_n(rst_250_n),
+        .ch1_sample_pair(ch1_sample_pair),
+        .ch2_sample_pair(ch2_sample_pair),
+        .sample_valid(sample_valid),
+        .dac1_data(dac1_data),
+        .dac2_data(dac2_data)
+    );
+
+`ifdef SIMULATION
+    assign dac_clk_p = clk_250m;
+    assign dac_clk_n = ~clk_250m;
+`else
+    OBUFDS #(
+        .IOSTANDARD("LVDS_25")
+    ) u_dac_clk_obufds (
+        .I(clk_250m),
+        .O(dac_clk_p),
+        .OB(dac_clk_n)
+    );
+`endif
 
 endmodule

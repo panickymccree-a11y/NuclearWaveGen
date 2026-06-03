@@ -7,7 +7,8 @@
 //   32..32+SAMPLES_PER_CLK-1 : noise RNG streams
 module rng_bank_10mcps #(
     parameter integer SAMPLES_PER_CLK = 2,
-    parameter integer RNG_BITS        = 64
+    parameter integer RNG_BITS        = 64,
+    parameter [63:0]  SEED_SALT       = 64'd0
 ) (
     input  wire                               clk,
     input  wire                               rst_n,
@@ -49,7 +50,8 @@ module rng_bank_10mcps #(
             wire [63:0] rnd_time;
 
             rng_xorshift64 #(
-                .SEED(64'h9E37_79B9_7F4A_7C15 ^ (64'hBF58_476D_1CE4_E5B9 * (i + 1)))
+                .SEED(64'h9E37_79B9_7F4A_7C15 ^ SEED_SALT ^
+                      (64'hBF58_476D_1CE4_E5B9 * (i + 1)))
             ) u_rng_time (
                 .clk(clk),
                 .rst_n(rst_n),
@@ -69,7 +71,8 @@ module rng_bank_10mcps #(
             wire [63:0] rnd_amp;
 
             rng_xorshift64 #(
-                .SEED(64'hD1B5_4A32_D192_ED03 ^ (64'h94D0_49BB_1331_11EB * (i + 1)))
+                .SEED(64'hD1B5_4A32_D192_ED03 ^ SEED_SALT ^
+                      (64'h94D0_49BB_1331_11EB * (i + 1)))
             ) u_rng_amp (
                 .clk(clk),
                 .rst_n(rst_n),
@@ -89,7 +92,8 @@ module rng_bank_10mcps #(
             wire [63:0] rnd_noise;
 
             rng_xorshift64 #(
-                .SEED(64'hA076_1D64_78BD_642F ^ (64'hE703_7ED1_A0B4_28DB * (i + 1)))
+                .SEED(64'hA076_1D64_78BD_642F ^ SEED_SALT ^
+                      (64'hE703_7ED1_A0B4_28DB * (i + 1)))
             ) u_rng_noise (
                 .clk(clk),
                 .rst_n(rst_n),

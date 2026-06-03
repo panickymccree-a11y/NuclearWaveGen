@@ -26,6 +26,17 @@ module nuc_event_gen_10mcps_top #(
     parameter [4:0]  FIXED_DECAY_SHIFT       = 5'd0,
     parameter integer ENABLE_STATE_OVERFLOW  = 1,
     parameter integer ENABLE_STATUS_COUNTERS = 1,
+    parameter integer STATIC_CONFIG          = 0,
+    parameter integer STATIC_RUN_ENABLE      = 1,
+    parameter [31:0] STATIC_RATE_THRESHOLD_Q32 = 32'd0,
+    parameter integer STATIC_AMP_LUT_EN      = 1,
+    parameter [15:0] STATIC_FIXED_AMP        = 16'd8192,
+    parameter [4:0]  STATIC_DECAY_SHIFT      = DEFAULT_DECAY_SHIFT,
+    parameter [4:0]  STATIC_OUTPUT_SHIFT     = DEFAULT_OUTPUT_SHIFT,
+    parameter signed [31:0] STATIC_BASELINE_OFFSET = 32'sd0,
+    parameter integer STATIC_NOISE_ENABLE    = 0,
+    parameter [4:0]  STATIC_NOISE_SHIFT      = DEFAULT_NOISE_SHIFT,
+    parameter [63:0] RNG_SEED_SALT           = 64'd0,
     parameter [31:0] MAX_RATE_THRESHOLD_Q32 =
         ((((64'd1 * MAX_RATE_CPS) << 32) +
           (((64'd1 * CORE_CLK_HZ) * SAMPLES_PER_CLK) / 2)) /
@@ -121,44 +132,67 @@ module nuc_event_gen_10mcps_top #(
     assign dac_sample_valid = run_enable;
     assign status_word      = counter_status_word;
 
-    cfg_regfile_10mcps #(
-        .MAX_RATE_THRESHOLD_Q32(MAX_RATE_THRESHOLD_Q32),
-        .DEFAULT_DECAY_SHIFT(DEFAULT_DECAY_SHIFT),
-        .DEFAULT_OUTPUT_SHIFT(DEFAULT_OUTPUT_SHIFT),
-        .DEFAULT_NOISE_SHIFT(DEFAULT_NOISE_SHIFT)
-    ) u_cfg (
-        .clk(clk),
-        .rst_n(rst_n),
-        .cfg_valid(cfg_valid),
-        .cfg_write(cfg_write),
-        .cfg_addr(cfg_addr),
-        .cfg_wdata(cfg_wdata),
-        .cfg_rdata(cfg_rdata),
-        .cfg_ready(cfg_ready),
-        .run_enable(run_enable),
-        .soft_reset_pulse(soft_reset_pulse),
-        .rate_threshold_q32(rate_threshold_q32),
-        .amp_lut_en(amp_lut_en),
-        .fixed_amp(fixed_amp),
-        .decay_shift(decay_shift),
-        .output_shift(output_shift),
-        .baseline_offset(baseline_offset),
-        .noise_enable(noise_enable),
-        .noise_shift(noise_shift),
-        .seed_load(seed_load),
-        .seed_sel(seed_sel),
-        .seed_zero(seed_zero),
-        .seed_data(seed_data),
-        .sample_count(sample_count),
-        .candidate_count(candidate_count),
-        .emitted_count(emitted_count),
-        .saturation_count(saturation_count),
-        .status_word(counter_status_word)
-    );
+    generate
+        if (STATIC_CONFIG != 0) begin : g_static_config
+            assign cfg_rdata           = 32'd0;
+            assign cfg_ready           = 1'b1;
+            assign run_enable          = (STATIC_RUN_ENABLE != 0);
+            assign soft_reset_pulse    = 1'b0;
+            assign rate_threshold_q32  = (STATIC_RATE_THRESHOLD_Q32 != 32'd0) ?
+                                         STATIC_RATE_THRESHOLD_Q32 : MAX_RATE_THRESHOLD_Q32;
+            assign amp_lut_en          = (STATIC_AMP_LUT_EN != 0);
+            assign fixed_amp           = STATIC_FIXED_AMP;
+            assign decay_shift         = STATIC_DECAY_SHIFT;
+            assign output_shift        = STATIC_OUTPUT_SHIFT;
+            assign baseline_offset     = STATIC_BASELINE_OFFSET;
+            assign noise_enable        = (STATIC_NOISE_ENABLE != 0);
+            assign noise_shift         = STATIC_NOISE_SHIFT;
+            assign seed_load           = 1'b0;
+            assign seed_sel            = 8'd0;
+            assign seed_zero           = 1'b1;
+            assign seed_data           = 64'd0;
+        end else begin : g_cfg_regfile
+            cfg_regfile_10mcps #(
+                .MAX_RATE_THRESHOLD_Q32(MAX_RATE_THRESHOLD_Q32),
+                .DEFAULT_DECAY_SHIFT(DEFAULT_DECAY_SHIFT),
+                .DEFAULT_OUTPUT_SHIFT(DEFAULT_OUTPUT_SHIFT),
+                .DEFAULT_NOISE_SHIFT(DEFAULT_NOISE_SHIFT)
+            ) u_cfg (
+                .clk(clk),
+                .rst_n(rst_n),
+                .cfg_valid(cfg_valid),
+                .cfg_write(cfg_write),
+                .cfg_addr(cfg_addr),
+                .cfg_wdata(cfg_wdata),
+                .cfg_rdata(cfg_rdata),
+                .cfg_ready(cfg_ready),
+                .run_enable(run_enable),
+                .soft_reset_pulse(soft_reset_pulse),
+                .rate_threshold_q32(rate_threshold_q32),
+                .amp_lut_en(amp_lut_en),
+                .fixed_amp(fixed_amp),
+                .decay_shift(decay_shift),
+                .output_shift(output_shift),
+                .baseline_offset(baseline_offset),
+                .noise_enable(noise_enable),
+                .noise_shift(noise_shift),
+                .seed_load(seed_load),
+                .seed_sel(seed_sel),
+                .seed_zero(seed_zero),
+                .seed_data(seed_data),
+                .sample_count(sample_count),
+                .candidate_count(candidate_count),
+                .emitted_count(emitted_count),
+                .saturation_count(saturation_count),
+                .status_word(counter_status_word)
+            );
+        end
+    endgenerate
 
     rng_bank_10mcps #(
         .SAMPLES_PER_CLK(SAMPLES_PER_CLK),
-        .RNG_BITS(RNG_BITS)
+        .RNG_BITS(RNG_BITS),
+        .SEED_SALT(RNG_SEED_SALT)
     ) u_rng (
         .clk(clk),
         .rst_n(rst_n),
