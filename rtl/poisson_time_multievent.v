@@ -1,26 +1,76 @@
 `timescale 1ns/1ps
 
+// ===========================================================================
+// Ð¡lambda²´ËÉ¶àÊÂ¼þÉú³ÉÆ÷
+//
+// ÔÚÃ¿¸ö²ÉÑùÍ¨µÀÄÚ£¬ÓÃÒ»¸ö¾ùÔÈËæ»úÊýÓ³ÉäÎª k=0..MAX_EVENTS_PER_SAMPLE
+// ¸ö²´ËÉÊÂ¼þ£¬Ö§³ÖÃ¿¸ö²ÉÑùµãÍ¬Ê±·¢Éú¶à´ï4¸öÊÂ¼þ¡£
+//
+// ²´ËÉ·Ö²¼µÄÐ¡lambda½üËÆ£º
+//   ¶ÔÓÚ lambda ~ 0.02£¨10Mcps/500MSa/s£©£¬k>=2 µÄÎ²²¿¸ÅÂÊËäÐ¡µ«¿É²âÁ¿¡£
+//   ±¾Ä£¿éÍ¨¹ýÀÛ»ý¸ÅÂÊãÐÖµ½üËÆÊµÏÖ¶àÊÂ¼þÅÐ¶¨£º
+//
+//     P(k>=1) ~ lambda          -> threshold_ge1£¨ÖÁÉÙ1¸öÊÂ¼þ£©
+//     P(k>=2) ~ lambda^2 / 2    -> threshold_ge2£¨ÖÁÉÙ2¸öÊÂ¼þ£©
+//     P(k>=3) ~ lambda^3 / 6    -> threshold_ge3£¨ÖÁÉÙ3¸öÊÂ¼þ£©
+//     P(k>=4) ~ lambda^4 / 24   -> threshold_ge4£¨ÖÁÉÙ4¸öÊÂ¼þ£©
+//
+//   ËùÓÐãÐÖµÎª Q0.32 ¸ñÊ½µÄ32Î»ÎÞ·ûºÅÊý¡£
+//   ¾ùÔÈËæ»úÊýÏÈºóÓë¸÷¼¶ãÐÖµ±È½Ï£¬È·¶¨ÊÂ¼þÊýk¡£
+//
+// ãÐÖµ¼ÆËãÁ÷Ë®Ïß£¨½öÔÚ MAX_EVENTS_PER_SAMPLE > 1 Ê±ÆôÓÃ£©£º
+//   Stage s1£ºÓÃ DSP ³Ë·¨Æ÷¼ÆËã lambda^2
+//   Stage s2£º³ËÒÔ lambda -> lambda^3
+//   Stage s3£º³ËÒÔ lambda -> lambda^4£¬Í¬Ê±Æô¶¯ lambda^3/6 ºÍ lambda^4/24 ³ý·¨
+//   Stage s4£ºµÈ´ý³ý·¨Íê³É
+//   -> Ã¿µ± lambda ±ä»¯Ê±ÖØÐÂ¼ÆËã£¬·ñÔò»º´æ½á¹û
+//
+// ÊÂ¼þÅÐ¶¨Á÷Ë®Ïß£¨4¼¶£¬¶ÀÁ¢ÓÚãÐÖµ¼ÆËã£©£º
+//   Stage 1£º¼Ä´æÊäÈëRNGºÍ4¸öãÐÖµ¿ìÕÕ
+//   Stage 2£º4¸ö32Î»±È½ÏÆ÷²¢ÐÐ¶ÀÁ¢ÔËÐÐ -> ¼Ä´æ±È½Ï½á¹û
+//   Stage 3£ºÓÅÏÈ¼¶±àÂëÆ÷£¨´Ó¸ßÎ»¿ªÊ¼ÅÐ¶¨kÖµ£©-> ¼Ä´æ
+//   Stage 4£º×îÖÕÊä³ö¼Ä´æÆ÷
+//
+// ÎªºÎÓÃ4¼¶²¢ÐÐ±È½Ï¶ø·Ç´®ÐÐÓÅÏÈ¼¶Á´£¿
+//   ´«Í³´®ÐÐ·½°¸ÐèÒªÏÈÅÐ¶Ïk>=4 -> Î´ÃüÖÐÔÙÅÐk>=3 -> ...£¬
+//   Ã¿¸ö32Î»±È½ÏÆ÷ÓÐ~8¼¶CARRY4½øÎ»Á´£¬4¸ö´®ÐÐ¾ÍÊÇ32¼¶¡£
+//   ²¢ÐÐ·½°¸4¸ö±È½ÏÆ÷Í¬Ê±ÔËÐÐ£¨Éî¶ÈÏàÍ¬£©£¬È»ºóÓÃ2¼¶LUT
+//   ×ömuxÑ¡Ôñ£¬Ê±ÐòÂ·¾¶Ëõ¶ÌÔ¼60%¡£
+//
+// ³ý·¨Æ÷ËµÃ÷£º
+//   ÓÃË³Ðò³ý·¨Æ÷ const_div_u32_seq£¨32¸öÖÜÆÚÍê³É£©£¬
+//   Á½¸ö³ý·¨²¢ÐÐÔËÐÐ£¨/6 ºÍ /24 ¸÷×ÔÓÃ¶ÀÁ¢³ý·¨Æ÷ÊµÀý£©¡£
+// ===========================================================================
+
+// ===========================================================================
+// Ë³Ðò³£Êý³ý·¨Æ÷£¨32Î» / Ð¡³£Êý£©
+//
+// ÓÃÒÆÎ»-¼õ·¨µÄ¾­µä³ý·¨Ëã·¨ÊµÏÖ32Î»ÎÞ·ûºÅ³ýÒÔ³£Êý¡£
+// Ã¿¸öÊ±ÖÓÖÜÆÚ´¦Àí1Î»£¬32¸öÖÜÆÚÍê³ÉÒ»´Î³ý·¨¡£
+//
+// ²ÎÊý»¯Éè¼Æ£ºDIVISOR ÊÇ±àÒëÆÚ³£Á¿£¬×ÛºÏÆ÷»áÕë¶ÔÌØ¶¨³ýÊý×öÓÅ»¯¡£
+// ===========================================================================
 module const_div_u32_seq #(
-    parameter integer DIVISOR = 6
+    parameter integer DIVISOR = 6                            // ³£Êý³ýÊý
 ) (
     input  wire        clk,
     input  wire        rst_n,
-    input  wire        start,
-    input  wire [31:0] dividend,
-    output reg         busy,
-    output reg         done,
-    output reg  [31:0] quotient
+    input  wire        start,                                // Æô¶¯ÐÅºÅ£¨µ¥ÖÜÆÚÂö³å£©
+    input  wire [31:0] dividend,                             // ±»³ýÊý
+    output reg         busy,                                 // Ã¦±êÖ¾£¨³ý·¨½øÐÐÖÐ£©
+    output reg         done,                                 // Íê³ÉÂö³å
+    output reg  [31:0] quotient                              // ÉÌ
 );
 
-    localparam integer REM_BITS = 6;
+    localparam integer REM_BITS = 6;                         // ÓàÊýÎ»¿í
     localparam [REM_BITS-1:0] DIVISOR_CONST = DIVISOR[REM_BITS-1:0];
 
-    reg [31:0] dividend_shift;
-    reg [31:0] quotient_work;
-    reg [REM_BITS-1:0] remainder;
-    reg [5:0] bit_index;
-    reg [REM_BITS-1:0] remainder_shift;
-    reg [31:0] quotient_next;
+    reg [31:0]           dividend_shift;                     // ÒÆÎ»ÖÐµÄ±»³ýÊý
+    reg [31:0]           quotient_work;                      // ¹¹½¨ÖÐµÄÉÌ
+    reg [REM_BITS-1:0]   remainder;                          // µ±Ç°ÓàÊý
+    reg [5:0]            bit_index;                          // µ±Ç°´¦ÀíµÄbitÎ»ÖÃ£¨31->0£©
+    reg [REM_BITS-1:0]   remainder_shift;                    // ÓàÊý×óÒÆÒ»Î»+ÐÂbit
+    reg [31:0]           quotient_next;                      // ÉÌµÄÏÂÒ»Öµ
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -32,35 +82,37 @@ module const_div_u32_seq #(
             remainder      <= {REM_BITS{1'b0}};
             bit_index      <= 6'd0;
         end else begin
-            done <= 1'b0;
+            done <= 1'b0;                                    // µ¥ÖÜÆÚÂö³å
 
             if (start && !busy) begin
                 busy           <= 1'b1;
                 dividend_shift <= dividend;
                 quotient_work  <= 32'd0;
                 remainder      <= {REM_BITS{1'b0}};
-                bit_index      <= 6'd31;
+                bit_index      <= 6'd31;                     // ´ÓMSB¿ªÊ¼
             end else if (busy) begin
+                // ---- ±ê×¼ÒÆÎ»-¼õ·¨³ý·¨µü´ú ----
+                // ÓàÊý×óÒÆ1Î»£¬´Ó±»³ýÊýÒÆÈë×î¸ßÎ»
                 remainder_shift = {remainder[REM_BITS-2:0], dividend_shift[31]};
                 quotient_next = quotient_work;
 
                 if (remainder_shift >= DIVISOR_CONST) begin
                     remainder = remainder_shift - DIVISOR_CONST;
-                    quotient_next[bit_index] = 1'b1;
+                    quotient_next[bit_index] = 1'b1;         // ¹»¼õÔòÉÌÎ»=1
                 end else begin
                     remainder = remainder_shift;
-                    quotient_next[bit_index] = 1'b0;
+                    quotient_next[bit_index] = 1'b0;         // ²»¹»¼õÔòÉÌÎ»=0
                 end
 
                 quotient_work  <= quotient_next;
                 dividend_shift <= {dividend_shift[30:0], 1'b0};
 
                 if (bit_index == 6'd0) begin
-                    busy     <= 1'b0;
+                    busy     <= 1'b0;                        // ´¦ÀíÍêËùÓÐ32Î»
                     done     <= 1'b1;
                     quotient <= quotient_next;
                 end else begin
-                    bit_index <= bit_index - 6'd1;
+                    bit_index <= bit_index - 6'd1;           // ÒÆÏòÏÂÒ»Î»
                 end
             end
         end
@@ -68,40 +120,35 @@ module const_div_u32_seq #(
 
 endmodule
 
-// Small-lambda Poisson event counter for each sample lane.
-// rate_threshold_q32 represents lambda in Q0.32:
-//   lambda = rate_cps / equivalent_sample_rate
-//
-// For the 10 Mcps / 500 MS/s default, lambda is 0.02. The k>=2 tail is
-// small but measurable, so this module maps one uniform RNG word per lane
-// into k=0..MAX_EVENTS_PER_SAMPLE using a compact Poisson-tail approximation:
-//   P(k>=1) ~= lambda
-//   P(k>=2) ~= lambda^2 / 2
-//   P(k>=3) ~= lambda^3 / 6
-//   P(k>=4) ~= lambda^4 / 24
+
 module poisson_time_multievent #(
-    parameter integer SAMPLES_PER_CLK      = 2,
-    parameter integer RNG_BITS             = 64,
-    parameter integer K_BITS               = 3,
-    parameter integer MAX_EVENTS_PER_SAMPLE = 4,
-    parameter integer RATE_THRESHOLD_BITS   = 32
+    parameter integer SAMPLES_PER_CLK       = 2,             // Ã¿Ê±ÖÓÖÜÆÚ²¢ÐÐ²ÉÑùÍ¨µÀÊý
+    parameter integer RNG_BITS              = 64,            // Ëæ»úÊýÎ»¿í
+    parameter integer K_BITS                = 3,             // ÊÂ¼þ¼ÆÊýÎ»¿í£¨×î´ó7£©
+    parameter integer MAX_EVENTS_PER_SAMPLE = 4,             // Ã¿²ÉÑùµã×î´óÊÂ¼þÊý
+    parameter integer RATE_THRESHOLD_BITS   = 32             // ËÙÂÊãÐÖµÎ»¿í
 ) (
-    input  wire                                clk,
-    input  wire                                rst_n,
-    input  wire                                enable,
-    input  wire [31:0]                         rate_threshold_q32,
-    input  wire [SAMPLES_PER_CLK*RNG_BITS-1:0] rng_time_vec,
-    output wire [SAMPLES_PER_CLK-1:0]          event_valid_vec,
-    output wire [SAMPLES_PER_CLK*K_BITS-1:0]   event_count_vec
+    input  wire                                                 clk,
+    input  wire                                                 rst_n,
+    input  wire                                                 enable,             // È«¾ÖÊ¹ÄÜ
+    input  wire [31:0]                                          rate_threshold_q32, // ËÙÂÊãÐÖµ lambda£¨Q0.32£©
+    input  wire [SAMPLES_PER_CLK*RNG_BITS-1:0]                  rng_time_vec,       // Ê±¼äÅÐ¶¨Ëæ»úÊýÏòÁ¿
+    output wire [SAMPLES_PER_CLK-1:0]                           event_valid_vec,    // ÊÂ¼þÓÐÐ§±êÖ¾
+    output wire [SAMPLES_PER_CLK*K_BITS-1:0]                    event_count_vec     // ÊÂ¼þ¼ÆÊý
 );
 
-    wire [31:0] threshold_ge1_q32;
-    wire [31:0] threshold_ge2_q32;
-    wire [31:0] threshold_ge3_q32;
-    wire [31:0] threshold_ge4_q32;
+    // ---- ¶à¼¶ãÐÖµÐÅºÅ ----
+    wire [31:0] threshold_ge1_q32;                             // k>=1 ãÐÖµ
+    wire [31:0] threshold_ge2_q32;                             // k>=2 ãÐÖµ
+    wire [31:0] threshold_ge3_q32;                             // k>=3 ãÐÖµ
+    wire [31:0] threshold_ge4_q32;                             // k>=4 ãÐÖµ
 
+    // ===========================================================================
+    // ãÐÖµ¼ÆËã£º·ÖÎªµ¥ÊÂ¼þÄ£Ê½ºÍ¶àÊÂ¼þÄ£Ê½
+    // ===========================================================================
     generate
         if (MAX_EVENTS_PER_SAMPLE <= 1) begin : g_single_event_thresholds
+            // ---- µ¥ÊÂ¼þÄ£Ê½£º½öÐè lambda ãÐÖµ£¬Ö±½Ó¼Ä´æ ----
             reg [31:0] threshold_ge1_q32_r;
 
             always @(posedge clk or negedge rst_n) begin
@@ -117,22 +164,27 @@ module poisson_time_multievent #(
             assign threshold_ge3_q32 = 32'd0;
             assign threshold_ge4_q32 = 32'd0;
         end else begin : g_multi_event_thresholds
-            // â”€â”€ DSP pipeline registers with use_dsp attribute â”€â”€
+            // ===================================================================
+            // ¶àÊÂ¼þÄ£Ê½£ºÓÃDSP³Ë·¨Æ÷+Ë³Ðò³ý·¨Æ÷¼ÆËã lambda^2, lambda^3, lambda^4 ãÐÖµ
+            // ===================================================================
+
+            // ---- DSP³Ë·¨Æ÷Á÷Ë®Ïß²ÎÊý ----
             localparam integer RATE_BITS_CLAMPED = (RATE_THRESHOLD_BITS < 1) ? 1 :
                                                     (RATE_THRESHOLD_BITS > 32) ? 32 :
                                                     RATE_THRESHOLD_BITS;
-            localparam integer MULT_LATENCY      = 18;
+            localparam integer MULT_LATENCY      = 18;          // ³Ë·¨Æ÷IPµÄÁ÷Ë®ÏßÑÓ³Ù
             localparam integer MULT_WAIT_CYCLES  = MULT_LATENCY + 1;
 
-            localparam [2:0] THRESH_IDLE        = 3'd0;
-            localparam [2:0] THRESH_WAIT_SQ     = 3'd1;
-            localparam [2:0] THRESH_WAIT_CUBE   = 3'd2;
-            localparam [2:0] THRESH_WAIT_FOURTH = 3'd3;
-            localparam [2:0] THRESH_DIV         = 3'd4;
-            localparam [2:0] THRESH_WAIT_DIV    = 3'd5;
+            // ---- ×´Ì¬»ú×´Ì¬¶¨Òå ----
+            localparam [2:0] THRESH_IDLE        = 3'd0;       // ¿ÕÏÐ/»º´æÓÐÐ§
+            localparam [2:0] THRESH_WAIT_SQ     = 3'd1;       // µÈ´ý lambda^2 ¼ÆËãÍê³É
+            localparam [2:0] THRESH_WAIT_CUBE   = 3'd2;       // µÈ´ý lambda^3 ¼ÆËãÍê³É
+            localparam [2:0] THRESH_WAIT_FOURTH = 3'd3;       // µÈ´ý lambda^4 ¼ÆËãÍê³É
+            localparam [2:0] THRESH_DIV         = 3'd4;       // Æô¶¯³ý·¨
+            localparam [2:0] THRESH_WAIT_DIV    = 3'd5;       // µÈ´ý³ý·¨Íê³É
 
             reg [2:0] thresh_state;
-            reg       threshold_valid;
+            reg       threshold_valid;                         // ãÐÖµ»º´æÓÐÐ§±êÖ¾
 
             wire [RATE_BITS_CLAMPED-1:0] rate_threshold_limited;
             wire [31:0] rate_threshold_limited_q32;
@@ -140,13 +192,15 @@ module poisson_time_multievent #(
             assign rate_threshold_limited_q32 =
                 {{(32-RATE_BITS_CLAMPED){1'b0}}, rate_threshold_limited};
 
-            reg [5:0]   mult_wait_count;
-            reg [63:0]  mult_a;
-            reg [63:0]  mult_b;
-            wire [127:0] mult_p;
-            reg [31:0]  calc_rate_threshold_q32;
-            reg [31:0]  active_rate_threshold_q32;
+            // ---- ³Ë·¨Æ÷½Ó¿Ú ----
+            reg [5:0]   mult_wait_count;                       // ³Ë·¨µÈ´ý¼ÆÊýÆ÷
+            reg [63:0]  mult_a;                                // ³Ë·¨Æ÷ÊäÈëA
+            reg [63:0]  mult_b;                                // ³Ë·¨Æ÷ÊäÈëB
+            wire [127:0] mult_p;                               // ³Ë·¨Æ÷Êä³öP
+            reg [31:0]  calc_rate_threshold_q32;               // ÕýÔÚ¼ÆËãÖÐµÄ lambda Öµ
+            reg [31:0]  active_rate_threshold_q32;             // µ±Ç°»º´æµÄ lambda Öµ
 
+            // ---- DSP³Ë·¨Æ÷IPÊµÀý ----
             multi_threshold u_threshold_mult (
                 .CLK(clk),
                 .A(mult_a),
@@ -154,25 +208,26 @@ module poisson_time_multievent #(
                 .P(mult_p)
             );
 
-
-            // â”€â”€ KEEP on threshold registers to prevent logic merging â”€â”€
+            // KEEPÔ¼Êø·ÀÖ¹ãÐÖµ¼Ä´æÆ÷±»ºÏ²¢ÓÅ»¯
             (* keep = "true" *) reg [31:0] threshold_ge1_q32_r;
             (* keep = "true" *) reg [31:0] threshold_ge2_q32_r;
             (* keep = "true" *) reg [31:0] threshold_ge3_q32_r;
             (* keep = "true" *) reg [31:0] threshold_ge4_q32_r;
 
+            // ---- ³ý·¨Æ÷½Ó¿Ú ----
             reg        div_start;
             wire       div6_busy;
             wire       div6_done;
-            wire [31:0] div6_quotient;
+            wire [31:0] div6_quotient;                         // lambda^3 / 6
             wire       div24_busy;
             wire       div24_done;
-            wire [31:0] div24_quotient;
+            wire [31:0] div24_quotient;                        // lambda^4 / 24
             (* keep = "true" *) reg [31:0] pending_threshold_ge1_q32;
             (* keep = "true" *) reg [31:0] pending_threshold_ge2_q32;
             reg [31:0] pending_div6_dividend;
             reg [31:0] pending_div24_dividend;
 
+            // ³ý·¨Æ÷ /6 ÊµÀý
             const_div_u32_seq #(
                 .DIVISOR(6)
             ) u_div6 (
@@ -185,6 +240,7 @@ module poisson_time_multievent #(
                 .quotient(div6_quotient)
             );
 
+            // ³ý·¨Æ÷ /24 ÊµÀý
             const_div_u32_seq #(
                 .DIVISOR(24)
             ) u_div24 (
@@ -216,59 +272,60 @@ module poisson_time_multievent #(
                     pending_div24_dividend <= 32'd0;
                     div_start <= 1'b0;
                 end else begin
-                    div_start <= 1'b0;
+                    div_start <= 1'b0;                         // µ¥ÖÜÆÚÂö³å
 
-                    // â”€â”€ 4-stage multiplier pipeline â”€â”€
-                    // Stage s1: Î»Â² multiply
+                    // ---- 4¼¶³Ë·¨Æ÷Á÷Ë®Ïß ----
                     case (thresh_state)
                         THRESH_IDLE: begin
+                            // µ± lambda ±ä»¯Ê±´¥·¢ÖØÐÂ¼ÆËã£¬·ñÔò±£³Ö»º´æ
                             if (!threshold_valid ||
                                 (rate_threshold_limited_q32 != active_rate_threshold_q32)) begin
                                 calc_rate_threshold_q32 <= rate_threshold_limited_q32;
-                                pending_threshold_ge1_q32 <= rate_threshold_limited_q32;
-                                mult_a <= {32'd0, rate_threshold_limited_q32};
-                                mult_b <= {32'd0, rate_threshold_limited_q32};
+                                pending_threshold_ge1_q32 <= rate_threshold_limited_q32; // = lambda
+                                mult_a <= {32'd0, rate_threshold_limited_q32};   // A = lambda
+                                mult_b <= {32'd0, rate_threshold_limited_q32};   // B = lambda
                                 mult_wait_count <= MULT_WAIT_CYCLES[5:0];
                                 thresh_state <= THRESH_WAIT_SQ;
                             end
                         end
 
-                    // Stage s2: Î»Â³ multiply
+                        // µÈ´ý lambda^2 = lambda * lambda ¼ÆËãÍê³É
                         THRESH_WAIT_SQ: begin
                             if (mult_wait_count != 6'd0) begin
                                 mult_wait_count <= mult_wait_count - 6'd1;
                             end else begin
-                                pending_threshold_ge2_q32 <= mult_p[64:33];
-                                mult_a <= mult_p[63:0];
-                                mult_b <= {32'd0, calc_rate_threshold_q32};
+                                pending_threshold_ge2_q32 <= mult_p[64:33];     // lambda^2£¨Q32.64 -> Q0.32£©
+                                mult_a <= mult_p[63:0];                          // A = lambda^2
+                                mult_b <= {32'd0, calc_rate_threshold_q32};      // B = lambda
                                 mult_wait_count <= MULT_WAIT_CYCLES[5:0];
                                 thresh_state <= THRESH_WAIT_CUBE;
                             end
                         end
 
-                    // Stage s3: Î»â´ multiply
+                        // µÈ´ý lambda^3 = lambda^2 * lambda ¼ÆËãÍê³É
                         THRESH_WAIT_CUBE: begin
                             if (mult_wait_count != 6'd0) begin
                                 mult_wait_count <= mult_wait_count - 6'd1;
                             end else begin
-                                pending_div6_dividend <= mult_p[95:64];
-                                mult_a <= {32'd0, mult_p[95:64]};
-                                mult_b <= {32'd0, calc_rate_threshold_q32};
+                                pending_div6_dividend <= mult_p[95:64];          // lambda^3 -> ´ý³ý6
+                                mult_a <= {32'd0, mult_p[95:64]};                // A = lambda^3
+                                mult_b <= {32'd0, calc_rate_threshold_q32};      // B = lambda
                                 mult_wait_count <= MULT_WAIT_CYCLES[5:0];
                                 thresh_state <= THRESH_WAIT_FOURTH;
                             end
                         end
 
-                    // Stage s4: Extra pipeline stage for DSP cascade settling
+                        // µÈ´ý lambda^4 = lambda^3 * lambda ¼ÆËãÍê³É
                         THRESH_WAIT_FOURTH: begin
                             if (mult_wait_count != 6'd0) begin
                                 mult_wait_count <= mult_wait_count - 6'd1;
                             end else begin
-                                pending_div24_dividend <= mult_p[63:32];
+                                pending_div24_dividend <= mult_p[63:32];         // lambda^4 -> ´ý³ý24
                                 thresh_state <= THRESH_DIV;
                             end
                         end
 
+                        // Æô¶¯Á½¸ö²¢ÐÐ³ý·¨Æ÷
                         THRESH_DIV: begin
                             if (!div6_busy && !div24_busy) begin
                                 div_start                 <= 1'b1;
@@ -276,12 +333,13 @@ module poisson_time_multievent #(
                             end
                         end
 
+                        // µÈ´ý³ý·¨Íê³É -> ¸üÐÂËùÓÐ4¸öãÐÖµ
                         THRESH_WAIT_DIV: begin
                             if (div6_done && div24_done) begin
-                                threshold_ge1_q32_r <= pending_threshold_ge1_q32;
-                                threshold_ge2_q32_r <= pending_threshold_ge2_q32;
-                                threshold_ge3_q32_r <= div6_quotient;
-                                threshold_ge4_q32_r <= div24_quotient;
+                                threshold_ge1_q32_r <= pending_threshold_ge1_q32; // = lambda
+                                threshold_ge2_q32_r <= pending_threshold_ge2_q32; // = lambda^2
+                                threshold_ge3_q32_r <= div6_quotient;             // = lambda^3/6
+                                threshold_ge4_q32_r <= div24_quotient;            // = lambda^4/24
                                 active_rate_threshold_q32 <= pending_threshold_ge1_q32;
                                 threshold_valid <= 1'b1;
                                 thresh_state <= THRESH_IDLE;
@@ -302,21 +360,16 @@ module poisson_time_multievent #(
         end
     endgenerate
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // 4-stage pipeline comparator
-    // Stage 1: Register rng_time_vec input and threshold snapshot
-    // Stage 2: Parallel 32-bit comparisons (all 4 thresholds INDEPENDENTLY)
-    // Stage 3: Register comparison results
-    // Stage 4: Priority encoder from registered bits + final register
+    // ===========================================================================
+    // ÊÂ¼þÅÐ¶¨Á÷Ë®Ïß£¨4¼¶£©
     //
-    // This breaks the 15-CARRY4 priority-comparator chain into:
-    //   4 independent 32-bit comparators (max 8 CARRY4 each, ALL PARALLEL)
-    //   â†’ registered â†’ simple LUT-based priority mux (1-2 LUT levels)
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ½«´«Í³µÄ´®ÐÐÓÅÏÈ¼¶±È½ÏÆ÷Á´²ð·ÖÎª4¸ö¶ÀÁ¢²¢ÐÐ±È½ÏÆ÷£¬
+    // ÓÃÁ÷Ë®Ïß¼Ä´æÆ÷¶Ï¿ª³¤½øÎ»Á´¡£
+    // ===========================================================================
 
     genvar i;
 
-    // â”€â”€ Stage 1: Input registers â”€â”€
+    // ---- Stage 1£ºÊäÈë¼Ä´æ + ãÐÖµ¿ìÕÕ ----
     (* max_fanout = 50 *) reg [SAMPLES_PER_CLK*RNG_BITS-1:0] rng_time_vec_s1;
     reg [31:0] thresh_ge1_s1;
     reg [31:0] thresh_ge2_s1;
@@ -324,23 +377,22 @@ module poisson_time_multievent #(
     reg [31:0] thresh_ge4_s1;
     reg        enable_s1;
 
-    // â”€â”€ Stage 2: Parallel comparison (combinational), then registered â”€â”€
-    // One bit per lane: the result of rng[31:0] < threshold
-    reg [SAMPLES_PER_CLK-1:0] cmp_ge1_s2;
-    reg [SAMPLES_PER_CLK-1:0] cmp_ge2_s2;
-    reg [SAMPLES_PER_CLK-1:0] cmp_ge3_s2;
-    reg [SAMPLES_PER_CLK-1:0] cmp_ge4_s2;
+    // ---- Stage 2£º²¢ÐÐ±È½Ï½á¹û¼Ä´æÆ÷ ----
+    reg [SAMPLES_PER_CLK-1:0] cmp_ge1_s2;                    // k>=1 ±È½Ï½á¹û
+    reg [SAMPLES_PER_CLK-1:0] cmp_ge2_s2;                    // k>=2 ±È½Ï½á¹û
+    reg [SAMPLES_PER_CLK-1:0] cmp_ge3_s2;                    // k>=3 ±È½Ï½á¹û
+    reg [SAMPLES_PER_CLK-1:0] cmp_ge4_s2;                    // k>=4 ±È½Ï½á¹û
     reg                       enable_s2;
 
-    // â”€â”€ Stage 3: Priority encoder output (registered) â”€â”€
+    // ---- Stage 3£ºÓÅÏÈ¼¶±àÂëÊä³ö¼Ä´æÆ÷ ----
     reg [SAMPLES_PER_CLK*K_BITS-1:0] event_count_s3;
     reg [SAMPLES_PER_CLK-1:0]        event_valid_s3;
 
-    // â”€â”€ Stage 4: Final output register â”€â”€
-    reg [SAMPLES_PER_CLK-1:0]          event_valid_vec_r;
-    reg [SAMPLES_PER_CLK*K_BITS-1:0]   event_count_vec_r;
+    // ---- Stage 4£º×îÖÕÊä³ö¼Ä´æÆ÷ ----
+    reg [SAMPLES_PER_CLK-1:0]        event_valid_vec_r;
+    reg [SAMPLES_PER_CLK*K_BITS-1:0] event_count_vec_r;
 
-    // â”€â”€ Stage 1: Register rng_time inputs and threshold snapshot â”€â”€
+    // ---- Stage 1£º¼Ä´æÊäÈë ----
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             rng_time_vec_s1 <= {(SAMPLES_PER_CLK*RNG_BITS){1'b0}};
@@ -359,14 +411,13 @@ module poisson_time_multievent #(
         end
     end
 
-    // â”€â”€ Stage 2: Parallel compare + register â”€â”€
-    // All 4 comparisons run independently and in parallel â€” no priority chain
+    // ---- Stage 2£º²¢ÐÐ¶ÀÁ¢±È½Ï£¨Ã¿¸ö±È½ÏÆ÷Éî¶È×î´ó8¼¶CARRY4£© ----
     generate
         for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin : g_lane_s2
             wire [RNG_BITS-1:0] rng_s1_i;
             assign rng_s1_i = rng_time_vec_s1[(i+1)*RNG_BITS-1:i*RNG_BITS];
 
-            // Parallel independent comparisons (each max 8 CARRY4 deep)
+            // 4¸ö±È½ÏÆ÷Í¬Ê±ÔËÐÐ£ºÃ¿¸ö¶¼ÊÇ rng[31:0] < threshold_X
             wire cmp_ge1_w = (rng_s1_i[31:0] < thresh_ge1_s1);
             wire cmp_ge2_w = (rng_s1_i[31:0] < thresh_ge2_s1);
             wire cmp_ge3_w = (rng_s1_i[31:0] < thresh_ge3_s1);
@@ -396,7 +447,8 @@ module poisson_time_multievent #(
         end
     end
 
-    // â”€â”€ Stage 3: Priority encoder from registered compare bits â†’ register â”€â”€
+    // ---- Stage 3£ºÓÅÏÈ¼¶±àÂë ----
+    // ´Ó¸ßãÐÖµ¿ªÊ¼ÅÐ¶¨£ºk>=4 -> k=3 -> k=2 -> k=1 -> k=0
     generate
         for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin : g_lane_s3
             reg [K_BITS-1:0] event_count_comb;
@@ -404,15 +456,17 @@ module poisson_time_multievent #(
             always @(*) begin
                 event_count_comb = {K_BITS{1'b0}};
                 if (enable_s2) begin
+                    // ×¢£ºÓÅÏÈ¼¶´ÓÉÏµ½ÏÂµÝ¼õ
                     if ((MAX_EVENTS_PER_SAMPLE >= 4) && cmp_ge4_s2[i]) begin
-                        event_count_comb = 4;
+                        event_count_comb = 4;                // k>=4
                     end else if ((MAX_EVENTS_PER_SAMPLE >= 3) && cmp_ge3_s2[i]) begin
-                        event_count_comb = 3;
+                        event_count_comb = 3;                // k=3
                     end else if ((MAX_EVENTS_PER_SAMPLE >= 2) && cmp_ge2_s2[i]) begin
-                        event_count_comb = 2;
+                        event_count_comb = 2;                // k=2
                     end else if (cmp_ge1_s2[i]) begin
-                        event_count_comb = 1;
+                        event_count_comb = 1;                // k=1
                     end
+                    // else k=0£¨Ä¬ÈÏ£©
                 end
             end
 
@@ -422,13 +476,13 @@ module poisson_time_multievent #(
                     event_valid_s3[i] <= 1'b0;
                 end else begin
                     event_count_s3[(i+1)*K_BITS-1:i*K_BITS] <= event_count_comb;
-                    event_valid_s3[i] <= |event_count_comb;
+                    event_valid_s3[i] <= |event_count_comb;  // ÈÎÒâ·ÇÁã¼´ÓÐÐ§
                 end
             end
         end
     endgenerate
 
-    // â”€â”€ Stage 4: Final output register â”€â”€
+    // ---- Stage 4£º×îÖÕÊä³ö¼Ä´æÆ÷ ----
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             event_valid_vec_r <= {SAMPLES_PER_CLK{1'b0}};

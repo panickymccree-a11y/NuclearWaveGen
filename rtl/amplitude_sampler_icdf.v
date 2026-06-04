@@ -1,64 +1,96 @@
 `timescale 1ns/1ps
 
-// Random amplitude sampler.
-// amp_lut_en=0: all events use fixed_amp.
-// amp_lut_en=1: events use ICDF LUT addressed by independent amplitude RNG.
+// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// Ëæ»ú·ù¶È²ÉÑùÆ÷£¨ICDF ²é±í·¨£©
 //
-// PIPELINE: BRAM read data is registered (icdf_rd_data_d) to break the
-// BRAM Tco (~2.1ns on Artix-7) out of the amp_pair_sum accumulation path.
-// Control signals are delayed to match.
+// ¸ù¾Ý²´ËÉÊ±¼äÅÐ¶¨Ä£¿éÊä³öµÄÊÂ¼þÊýÁ¿ºÍÓÐÐ§±êÖ¾£¬ÎªÃ¿¸ö²ÉÑùÍ¨µÀµÄ
+// Ã¿¸öÊÂ¼þ´Ó ICDF ·ù¶È²éÕÒ±í£¨amp_lut_multiport£©ÖÐ¶ÁÈ¡¶ÔÓ¦µÄ·ù¶ÈÖµ£¬
+// ÔÙ½«Í¬Ò»Í¨µÀÄÚËùÓÐÊÂ¼þµÄ·ù¶ÈÀÛ¼Ó£¬µÃµ½¸ÃÍ¨µÀ¸ÃÊ±¿ÌµÄ×ÜÂö³å¸ß¶È¡£
+//
+// Á½ÖÖ·ù¶ÈÄ£Ê½£¨ÓÉ amp_lut_en ¿ØÖÆ£©£º
+//   amp_lut_en = 0£ºËùÓÐÊÂ¼þÊ¹ÓÃ¹Ì¶¨µÄ fixed_amp ·ù¶È£¨¾ùÔÈÂö³å¸ß¶È£©
+//   amp_lut_en = 1£ºÓÃ·ù¶ÈRNGµÄ¸ßÎ»×÷ÎªLUTµØÖ·²é±íµÃµ½Ëæ»ú·ù¶È
+//
+// ²é±íµØÖ·Éú³É£º
+//   ¶ÔÃ¿¸öÊÂ¼þµÄ amp RNG£¬È¡Æä¸ßÎ» [RNG_BITS-1 - ICDF_ADDR_BITS*(j+1) +: ICDF_ADDR_BITS]
+//   ×÷Îª LUT ¶ÁµØÖ·¡£Ã¿¸öÊÂ¼þÓÃ²»Í¬µÄ RNG Î»¶Î£¬±£Ö¤Í¬Ò»Í¨µÀÄÚ
+//   ¶à¸öÊÂ¼þµÄ·ù¶ÈÏà»¥¶ÀÁ¢¡£
+//
+// ¶àÊÂ¼þ·ù¶ÈÀÛ¼Ó£¨³É¶Ô¼Ó·¨Æ÷Ê÷£©£º
+//   ÎªÁËÔÚµ¥¸öÖÜÆÚÄÚÀÛ¼Ó×î¶à MAX_EVENTS_PER_SAMPLE ¸ö·ù¶ÈÖµ£¬
+//   ²ÉÓÃÁ½Á½Åä¶Ô ¡ú »ã×ÜµÄÁ½¼¶¼Ó·¨Ê÷¡£
+//   PAIR_COUNT = ceil(MAX_EVENTS_PER_SAMPLE / 2) ¸öÅä¶ÔÀÛ¼ÓÆ÷£¬
+//   Ã¿¸öÅä¶ÔÀÛ¼ÓÁ½¸öÏàÁÚÊÂ¼þµÄ·ù¶È£¬»ã×ÜÔÙÀÛ¼ÓÅä¶Ô½á¹û¡£
+//
+// Á÷Ë®ÏßÉè¼Æ£¨3¼¶£©£º
+//   Stage 1£¨addr_gen£©£º ÊÂ¼þ±êÖ¾ + RNG ¡ú LUT¶ÁµØÖ·£¨×éºÏÂß¼­£©
+//   Stage 2£¨bram_read£©£ºBRAM Í¬²½¶ÁÈ¡£¨1ÖÜÆÚÑÓ³Ù£©£¬Êý¾Ý¼Ä´æÆ÷»¯
+//   Stage 3£¨accumulate£©£ºÅä¶Ô¼Ó·¨ ¡ú »ã×Ü ¡ú Êä³ö impulse_sum
+//
+// BRAMÊý¾Ý¼Ä´æÆ÷»¯£º
+//   icdf_rd_data_d ½« BRAM µÄ Tco£¨Artix-7 Ô¼2.1ns£©´ÓÀÛ¼ÓÂ·¾¶ÖÐ¶Ï¿ª£¬
+//   Í¬Ê±ÑÓ³Ù¿ØÖÆÐÅºÅ£¨event_valid_d2, event_count_d2£©ÒÔ¶ÔÆëÊý¾Ý¡£
+// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
 module amplitude_sampler_icdf #(
-    parameter integer SAMPLES_PER_CLK = 2,
-    parameter integer RNG_BITS        = 64,
-    parameter integer ICDF_ADDR_BITS  = 14,
-    parameter integer AMP_BITS        = 16,
-    parameter integer IMP_BITS        = 24,
-    parameter integer K_BITS          = 3,
-    parameter integer MAX_EVENTS_PER_SAMPLE = 4,
-    parameter integer AMP_READ_PORTS  = SAMPLES_PER_CLK * MAX_EVENTS_PER_SAMPLE
+    parameter integer SAMPLES_PER_CLK      = 2,            // Ã¿Ê±ÖÓÖÜÆÚ²¢ÐÐ²ÉÑùÍ¨µÀÊý
+    parameter integer RNG_BITS             = 64,           // Ëæ»úÊýÎ»¿í
+    parameter integer ICDF_ADDR_BITS       = 14,           // LUTµØÖ·Î»¿í£¨14Î»¡ú16KÉî£©
+    parameter integer AMP_BITS             = 16,           // ·ù¶ÈÊý¾ÝÎ»¿í
+    parameter integer IMP_BITS             = 24,           // Âö³åÀÛ¼ÓÎ»¿í£¨º¬±¥ºÍ±£»¤£©
+    parameter integer K_BITS               = 3,            // Ã¿Í¨µÀÊÂ¼þ¼ÆÊýÎ»¿í
+    parameter integer MAX_EVENTS_PER_SAMPLE = 4,           // Ã¿¸ö²ÉÑùµã×î´óÊÂ¼þÊý
+    parameter integer AMP_READ_PORTS       = SAMPLES_PER_CLK * MAX_EVENTS_PER_SAMPLE
 ) (
-    input  wire                                clk,
-    input  wire                                rst_n,
-    input  wire                                enable,
-    input  wire                                amp_lut_en,
-    input  wire [AMP_BITS-1:0]                 fixed_amp,
-    input  wire [SAMPLES_PER_CLK-1:0]          event_valid_vec,
-    input  wire [SAMPLES_PER_CLK*K_BITS-1:0]   event_count_vec,
-    input  wire [SAMPLES_PER_CLK*RNG_BITS-1:0] rng_amp_vec,
-    output wire [AMP_READ_PORTS*ICDF_ADDR_BITS-1:0]  icdf_rd_addr_vec,
-    input  wire [AMP_READ_PORTS*AMP_BITS-1:0]        icdf_rd_data_vec,
-    output reg  [SAMPLES_PER_CLK-1:0]          impulse_valid_vec,
-    output reg  [SAMPLES_PER_CLK*K_BITS-1:0]   impulse_count_vec,
-    output reg  [SAMPLES_PER_CLK*IMP_BITS-1:0] impulse_sum_vec
+    input  wire                                                 clk,
+    input  wire                                                 rst_n,
+    input  wire                                                 enable,             // È«¾ÖÊ¹ÄÜ
+    input  wire                                                 amp_lut_en,         // 0=¹Ì¶¨·ù¶È, 1=ICDF²é±í
+    input  wire [AMP_BITS-1:0]                                  fixed_amp,          // ¹Ì¶¨·ù¶ÈÖµ
+    input  wire [SAMPLES_PER_CLK-1:0]                           event_valid_vec,    // ÊÂ¼þÓÐÐ§±êÖ¾
+    input  wire [SAMPLES_PER_CLK*K_BITS-1:0]                    event_count_vec,    // Ã¿Í¨µÀÊÂ¼þ¼ÆÊý
+    input  wire [SAMPLES_PER_CLK*RNG_BITS-1:0]                  rng_amp_vec,        // ·ù¶ÈËæ»úÊýÏòÁ¿
+    output wire [AMP_READ_PORTS*ICDF_ADDR_BITS-1:0]             icdf_rd_addr_vec,   // LUT¶ÁµØÖ·ÏòÁ¿
+    input  wire [AMP_READ_PORTS*AMP_BITS-1:0]                   icdf_rd_data_vec,   // LUT¶ÁÊý¾ÝÏòÁ¿
+    output reg  [SAMPLES_PER_CLK-1:0]                           impulse_valid_vec,  // Âö³åÓÐÐ§±êÖ¾
+    output reg  [SAMPLES_PER_CLK*K_BITS-1:0]                    impulse_count_vec,  // Âö³å¼ÆÊý
+    output reg  [SAMPLES_PER_CLK*IMP_BITS-1:0]                  impulse_sum_vec     // Âö³å·ù¶È×ÜºÍ
 );
 
-    reg [SAMPLES_PER_CLK-1:0] event_valid_d;
-    reg [SAMPLES_PER_CLK*K_BITS-1:0] event_count_d;
-    reg                       amp_lut_en_d;
-    reg [AMP_BITS-1:0]        fixed_amp_d;
+    // ©¤©¤ Stage 2 ¿ØÖÆÐÅºÅ¼Ä´æÆ÷ ©¤©¤
+    reg [SAMPLES_PER_CLK-1:0]            event_valid_d;
+    reg [SAMPLES_PER_CLK*K_BITS-1:0]     event_count_d;
+    reg                                  amp_lut_en_d;
+    reg [AMP_BITS-1:0]                   fixed_amp_d;
 
-    // Pipeline register for rng_amp to align with delayed event signals
-    // (event_valid_vec/event_count_vec are now registered in poisson_time_multievent)
-    reg [SAMPLES_PER_CLK*RNG_BITS-1:0] rng_amp_d;
+    // ©¤©¤ RNG·ù¶ÈÏòÁ¿ÑÓ³Ù©¤©¤
+    reg [SAMPLES_PER_CLK*RNG_BITS-1:0]   rng_amp_d;
 
-    // â”€â”€ Pipeline stage for BRAM read data â”€â”€
-    // Registers the BRAM output to break the RAMB36 Tco from the accumulation path
-    reg [AMP_READ_PORTS*AMP_BITS-1:0]        icdf_rd_data_d;
-    reg [SAMPLES_PER_CLK-1:0]                event_valid_d2;
-    reg [SAMPLES_PER_CLK*K_BITS-1:0]         event_count_d2;
-    reg                                      amp_lut_en_d2;
-    reg [AMP_BITS-1:0]                       fixed_amp_d2;
+    // ©¤©¤ Stage 3 BRAMÊý¾Ý¼Ä´æÆ÷ ©¤©¤
+    reg [AMP_READ_PORTS*AMP_BITS-1:0]    icdf_rd_data_d;       // BRAM¶Á³öÊý¾Ý¼Ä´æÆ÷
+    reg [SAMPLES_PER_CLK-1:0]            event_valid_d2;       // ¶ÔÆëºóµÄÓÐÐ§±êÖ¾
+    reg [SAMPLES_PER_CLK*K_BITS-1:0]     event_count_d2;       // ¶ÔÆëºóµÄÊÂ¼þ¼ÆÊý
+    reg                                  amp_lut_en_d2;
+    reg [AMP_BITS-1:0]                   fixed_amp_d2;
 
-    localparam integer ACC_WIDTH  = IMP_BITS + 8;
-    localparam integer PAIR_COUNT = (MAX_EVENTS_PER_SAMPLE + 1) / 2;
+    // ©¤©¤ ÀÛ¼Ó²ÎÊý ©¤©¤
+    localparam integer ACC_WIDTH  = IMP_BITS + 8;              // ÄÚ²¿ÀÛ¼ÓÎ»¿í£¨º¬8Î»ÓàÁ¿·ÀÒç³ö£©
+    localparam integer PAIR_COUNT = (MAX_EVENTS_PER_SAMPLE + 1) / 2; // Åä¶ÔÀÛ¼ÓÆ÷ÊýÁ¿
 
-    reg [SAMPLES_PER_CLK-1:0] impulse_valid_pipe;
-    reg [SAMPLES_PER_CLK*K_BITS-1:0] impulse_count_pipe;
-    reg [SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH-1:0] amp_pair_sum_d;
+    // ©¤©¤ Stage 3 Êä³öÁ÷Ë®Ïß ©¤©¤
+    reg [SAMPLES_PER_CLK-1:0]                       impulse_valid_pipe;
+    reg [SAMPLES_PER_CLK*K_BITS-1:0]                impulse_count_pipe;
+    reg [SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH-1:0]  amp_pair_sum_d;      // Åä¶ÔÀÛ¼Ó½á¹û
 
     genvar gi;
     genvar gj;
 
+    // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+    // Stage 1£ºÉú³É LUT ¶ÁµØÖ·£¨×éºÏÂß¼­£©
+    //
+    // ¶ÔÃ¿¸ö²ÉÑùÍ¨µÀµÄÃ¿¸öÊÂ¼þ²ÛÎ»£¬È¡ amp RNG µÄ²»Í¬Î»¶Î×÷ÎªµØÖ·¡£
+    // µÚ j ¸öÊÂ¼þÓÃ bits [RNG_BITS-1-j*ADDR_BITS -: ADDR_BITS]¡£
+    // ÎÞÐ§µÄÊÂ¼þ²ÛÎ»µØÖ·ÉèÎªÈ«Áã£¨²»¹ØÐÄ£¬·´Õý²»ÓÃ£©¡£
+    // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
     generate
         for (gi = 0; gi < SAMPLES_PER_CLK; gi = gi + 1) begin : g_addr
             wire [RNG_BITS-1:0] rng_i;
@@ -70,6 +102,7 @@ module amplitude_sampler_icdf #(
             for (gj = 0; gj < MAX_EVENTS_PER_SAMPLE; gj = gj + 1) begin : g_slot
                 localparam integer PORT_INDEX = gi * MAX_EVENTS_PER_SAMPLE + gj;
 
+                // ½öµ±LUTÊ¹ÄÜ¡¢Í¨µÀÓÐÐ§¡¢ÇÒ²ÛÎ»Ë÷ÒýÐ¡ÓÚÊÂ¼þÊýÊ±£¬²ÅÓÃRNGÎ»¶Î×÷µØÖ·
                 assign icdf_rd_addr_vec[(PORT_INDEX+1)*ICDF_ADDR_BITS-1:PORT_INDEX*ICDF_ADDR_BITS] =
                     (amp_lut_en && event_valid_vec[gi] && (event_count_i > gj)) ?
                     rng_i[RNG_BITS-1-(gj*ICDF_ADDR_BITS) -: ICDF_ADDR_BITS] :
@@ -82,9 +115,9 @@ module amplitude_sampler_icdf #(
     integer j;
     integer pair_idx;
     integer slot_idx;
-    reg [K_BITS-1:0] event_count_i;
-    reg [ACC_WIDTH-1:0] amp_pair_acc;
-    reg [ACC_WIDTH-1:0] amp_total_acc;
+    reg [K_BITS-1:0]   event_count_i;
+    reg [ACC_WIDTH-1:0] amp_pair_acc;                          // Åä¶ÔÀÛ¼ÓÆ÷
+    reg [ACC_WIDTH-1:0] amp_total_acc;                         // Í¨µÀ×ÜÀÛ¼ÓÆ÷
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -93,13 +126,13 @@ module amplitude_sampler_icdf #(
             amp_lut_en_d      <= 1'b0;
             fixed_amp_d       <= {AMP_BITS{1'b0}};
             rng_amp_d         <= {(SAMPLES_PER_CLK*RNG_BITS){1'b0}};
-            // Pipeline stage for BRAM data
+            // BRAMÊý¾ÝÁ÷Ë®Ïß
             icdf_rd_data_d    <= {(AMP_READ_PORTS*AMP_BITS){1'b0}};
             event_valid_d2    <= {SAMPLES_PER_CLK{1'b0}};
             event_count_d2    <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             amp_lut_en_d2     <= 1'b0;
             fixed_amp_d2      <= {AMP_BITS{1'b0}};
-            // Output pipeline
+            // Êä³öÁ÷Ë®Ïß
             impulse_valid_pipe <= {SAMPLES_PER_CLK{1'b0}};
             impulse_count_pipe <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             amp_pair_sum_d     <= {(SAMPLES_PER_CLK*PAIR_COUNT*ACC_WIDTH){1'b0}};
@@ -107,14 +140,14 @@ module amplitude_sampler_icdf #(
             impulse_count_vec <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             impulse_sum_vec   <= {(SAMPLES_PER_CLK*IMP_BITS){1'b0}};
         end else if (enable) begin
+            // ©¤©¤ Stage 2£º¼Ä´æ¿ØÖÆÐÅºÅºÍRNG ©¤©¤
             rng_amp_d        <= rng_amp_vec;
             event_valid_d <= event_valid_vec;
             event_count_d <= event_count_vec;
             amp_lut_en_d  <= amp_lut_en;
             fixed_amp_d   <= fixed_amp;
 
-            // â”€â”€ BRAM data pipeline register â”€â”€
-            // Breaks the RAMB36 Tco from the amp_pair_sum accumulation path
+            // ©¤©¤ Stage 3£ºBRAMÊý¾Ý¼Ä´æÆ÷£¨¶Ï¿ªTco£©+ ÀÛ¼Ó ©¤©¤
             icdf_rd_data_d <= icdf_rd_data_vec;
             event_valid_d2 <= event_valid_d;
             event_count_d2 <= event_count_d;
@@ -126,6 +159,7 @@ module amplitude_sampler_icdf #(
                 impulse_valid_pipe[i] <= event_valid_d2[i];
                 impulse_count_pipe[i*K_BITS +: K_BITS] <= event_count_i;
 
+                // ©¤©¤ Åä¶ÔÀÛ¼Ó£ºÃ¿Á½¸öÏàÁÚÊÂ¼þÒ»×é ©¤©¤
                 for (pair_idx = 0; pair_idx < PAIR_COUNT; pair_idx = pair_idx + 1) begin
                     amp_pair_acc = {ACC_WIDTH{1'b0}};
 
@@ -134,10 +168,12 @@ module amplitude_sampler_icdf #(
                         if ((slot_idx < MAX_EVENTS_PER_SAMPLE) &&
                             event_valid_d2[i] && (slot_idx < event_count_i)) begin
                             if (amp_lut_en_d2) begin
+                                // ²é±íÄ£Ê½£º´ÓBRAM¶Á³öµÄÊý¾Ý
                                 amp_pair_acc = amp_pair_acc +
                                     {{(ACC_WIDTH-AMP_BITS){1'b0}},
                                      icdf_rd_data_d[(i*MAX_EVENTS_PER_SAMPLE+slot_idx)*AMP_BITS +: AMP_BITS]};
                             end else begin
+                                // ¹Ì¶¨·ù¶ÈÄ£Ê½
                                 amp_pair_acc = amp_pair_acc +
                                     {{(ACC_WIDTH-AMP_BITS){1'b0}}, fixed_amp_d2};
                             end
@@ -148,18 +184,21 @@ module amplitude_sampler_icdf #(
                 end
             end
 
+            // ©¤©¤ Êä³ö¼¶£º»ã×ÜÅä¶Ô½á¹û ¡ú ±¥ºÍ±£»¤ ¡ú Êä³ö ©¤©¤
             impulse_valid_vec <= impulse_valid_pipe;
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
                 event_count_i = impulse_count_pipe[i*K_BITS +: K_BITS];
                 impulse_count_vec[i*K_BITS +: K_BITS] <= event_count_i;
                 amp_total_acc = {ACC_WIDTH{1'b0}};
 
+                // »ã×ÜËùÓÐÅä¶Ô½á¹û
                 for (pair_idx = 0; pair_idx < PAIR_COUNT; pair_idx = pair_idx + 1) begin
                     amp_total_acc = amp_total_acc +
                         amp_pair_sum_d[(i*PAIR_COUNT+pair_idx)*ACC_WIDTH +: ACC_WIDTH];
                 end
 
                 if (impulse_valid_pipe[i] && (event_count_i != {K_BITS{1'b0}})) begin
+                    // ±¥ºÍ±£»¤£ºÀÛ¼Ó½á¹û³¬³ö IMP_BITS ·¶Î§Ê±Ç¯Î»µ½×î´óÖµ
                     if (|amp_total_acc[ACC_WIDTH-1:IMP_BITS]) begin
                         impulse_sum_vec[i*IMP_BITS +: IMP_BITS] <= {IMP_BITS{1'b1}};
                     end else begin
@@ -170,6 +209,7 @@ module amplitude_sampler_icdf #(
                 end
             end
         end else begin
+            // enable=0 Ê±ËùÓÐ¼Ä´æÆ÷ÇåÁã
             event_valid_d     <= {SAMPLES_PER_CLK{1'b0}};
             event_count_d     <= {(SAMPLES_PER_CLK*K_BITS){1'b0}};
             icdf_rd_data_d    <= {(AMP_READ_PORTS*AMP_BITS){1'b0}};

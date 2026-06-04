@@ -6,6 +6,7 @@ amp_lut_dual_read_port.v
 amp_lut_multiport.v
 amplitude_sampler_icdf.v
 exp_decay_core.v
+exp_decay_bi_core.v
 noise_baseline_core.v
 mixer_saturator_simple.v
 event_counters_10mcps.v

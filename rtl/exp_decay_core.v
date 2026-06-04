@@ -1,55 +1,67 @@
 `timescale 1ns/1ps
 
-// One-pole exponential decay shaper.
-// Lanes are time-interleaved samples inside one core clock. The state is
-// updated lane by lane, so lane0 and lane1 form one continuous exponential
-// sample stream when viewed in sequence.
-// For every sample lane:
-//   state = state + (impulse << FRAC_BITS)
-//   pulse = state >> output_shift
-//   state = state - (state >> decay_shift)
+// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+// µ¥Ö¸ÊıË¥¼õÂö³åÕûĞÎºËĞÄ
 //
-// PIPELINE: 2-stage architecture to meet 250 MHz timing on Artix-7.
-//   Stage 1: decay + accumulate per lane â†’ pulse_state_vec_d, decay_state
-//   Stage 2: saturation check on registered pulse_state_pipe â†’ pulse_vec
-// The extra pipeline register breaks the 48-bit carry chain between
-// the accumulate loop and the saturation reduction-OR.
+// Ä£ÄâºË·øÉäÌ½²âÆ÷Êä³öÂö³åµÄÖ¸ÊıË¥¼õÌØĞÔ¡ª¡ªÂö³åË²¼äÌøÆğºó°´Ö¸Êı¹æÂÉ
+// »ºÂıË¥¼õ£¬µÈĞ§ÓÚ RC ·ÅµçÇúÏßµÄÀëÉ¢Ê±¼ä½üËÆ¡£
+//
+// ºËĞÄ¸üĞÂ¹«Ê½£¨Ã¿¸ö²ÉÑùÍ¨µÀÒÀ´ÎÖ´ĞĞ£©£º
+//   state   = state + (impulse << FRAC_BITS)     // ¢Ù µş¼ÓĞÂÂö³å£¨º¬12Î»Ğ¡Êı£©
+//   pulse   = state >> output_shift              // ¢Ú Êä³ö = ×´Ì¬Ëõ·Å
+//   state   = state - (state >> decay_shift)     // ¢Û Ö¸ÊıË¥¼õ£¨Ã¿´Î¼õÈ¥¹Ì¶¨±ÈÀı£©
+//
+// ¶àÍ¨µÀ´®ĞĞ´¦Àí£¨SAMPLES_PER_CLK > 1 Ê±£©£º
+//   lane0 ÏÈ¸üĞÂ decay_state ¡ú lane1 ÔÚ lane0 ¸üĞÂºóµÄ×´Ì¬ÉÏ¼ÌĞø ¡ú
+//   ÏÂÒ»ÖÜÆÚµÄ lane0 ¼Ì³ĞÉÏÒ»ÖÜÆÚ lane1 Ä©Î²µÄ×´Ì¬¡£
+//   Õâ±£Ö¤ÁË decay_state ÊÇÒ»¸öÈ«¾ÖÁ¬ĞøµÄÊ±¼äĞòÁĞ±äÁ¿¡£
+//
+// Ë¥¼õÊ±¼ä³£Êı£º
+//   Ã¿´Î²ÉÑùË¥¼õ±ÈÀıÎª 1 / 2^decay_shift¡£
+//   ÔÚ 500 MSa/s µÈĞ§²ÉÑùÂÊÏÂ£º
+//     decay_shift=4 ¡ú ¦Ó¡Ö16 ²ÉÑù¡Ö32 ns£¨¿ìË¥¼õ£¬¼âÂö³å£©
+//     decay_shift=8 ¡ú ¦Ó¡Ö256 ²ÉÑù¡Ö512 ns£¨ÂıË¥¼õ£¬¿íÂö³å£©
+//
+// PIPELINE£¨2¼¶Á÷Ë®Ïß£¬ÎªÂú×ã Artix-7 ÉÏ 250 MHz Ê±Ğò£©£º
+//   Stage 1£ºË¥¼õ + ÀÛ¼Ó ¡ú pulse_state_vec_d ¡ú pulse_state_pipe
+//   Stage 2£º±¥ºÍ¼ì²é ¡ú pulse_vec£¨¶Ï¿ª48Î»½øÎ»Á´µÄ·´À¡Â·¾¶£©
+// ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
 module exp_decay_core #(
-    parameter integer SAMPLES_PER_CLK = 2,
-    parameter integer IMP_BITS        = 24,
-    parameter integer ACC_BITS        = 48,
-    parameter integer PULSE_BITS      = 32,
-    parameter integer FRAC_BITS       = 12,
-    parameter integer DECAY_BEFORE_ACCUMULATE = 0,
-    parameter [4:0]  FIXED_DECAY_SHIFT = 5'd0,
-    parameter integer ENABLE_STATE_OVERFLOW = 1
+    parameter integer SAMPLES_PER_CLK       = 2,            // Ã¿Ê±ÖÓÖÜÆÚ²¢ĞĞ²ÉÑùÍ¨µÀÊı
+    parameter integer IMP_BITS              = 24,           // ÊäÈëÂö³å·ù¶ÈÎ»¿í
+    parameter integer ACC_BITS              = 48,           // ÄÚ²¿ÀÛ¼ÓÆ÷Î»¿í£¨=36Î»ÕûÊı+12Î»Ğ¡Êı£©
+    parameter integer PULSE_BITS            = 32,           // Êä³öÂö³åÎ»¿í
+    parameter integer FRAC_BITS             = 12,           // Ğ¡ÊıÎ»Êı£¨Q36.12¶¨µã¸ñÊ½£©
+    parameter integer DECAY_BEFORE_ACCUMULATE = 0,          // 0=ÏÈÀÛ¼ÓºóË¥¼õ£¨Ä¬ÈÏ£©, 1=ÏÈË¥¼õºóÀÛ¼Ó
+    parameter [4:0]  FIXED_DECAY_SHIFT      = 5'd0,        // ¹Ì¶¨Ë¥¼õÁ¿£¨·ÇÁãÊ±¸²¸ÇÅäÖÃÖµ£©
+    parameter integer ENABLE_STATE_OVERFLOW  = 1            // Òç³ö¼ì²âÊ¹ÄÜ
 ) (
-    input  wire                                clk,
-    input  wire                                rst_n,
-    input  wire                                enable,
-    input  wire                                clear,
-    input  wire [4:0]                          decay_shift,
-    input  wire [4:0]                          output_shift,
-    input  wire [SAMPLES_PER_CLK-1:0]          impulse_valid_vec,
-    input  wire [SAMPLES_PER_CLK*IMP_BITS-1:0] impulse_sum_vec,
-    output reg  [SAMPLES_PER_CLK*PULSE_BITS-1:0] pulse_vec,
-    output reg                                 state_overflow
+    input  wire                                                 clk,
+    input  wire                                                 rst_n,
+    input  wire                                                 enable,            // È«¾ÖÊ¹ÄÜ
+    input  wire                                                 clear,             // ×´Ì¬ÇåÁã£¨Èí¸´Î»£©
+    input  wire [4:0]                                           decay_shift,       // Ë¥¼õËÙ¶È¿ØÖÆ£¨ÓÒÒÆÁ¿£©
+    input  wire [4:0]                                           output_shift,      // Êä³ö·ù¶ÈËõ·Å
+    input  wire [SAMPLES_PER_CLK-1:0]                           impulse_valid_vec, // Âö³åÓĞĞ§±êÖ¾
+    input  wire [SAMPLES_PER_CLK*IMP_BITS-1:0]                  impulse_sum_vec,   // Âö³å·ù¶ÈÏòÁ¿
+    output reg  [SAMPLES_PER_CLK*PULSE_BITS-1:0]                pulse_vec,         // ÕûĞÎºóÂö³åÊä³ö
+    output reg                                                  state_overflow     // ×´Ì¬Òç³ö±êÖ¾
 );
 
-    reg [ACC_BITS-1:0] decay_state;
-    reg [ACC_BITS-1:0] work_state;
-    reg [ACC_BITS-1:0] next_state;
-    reg [ACC_BITS-1:0] decayed_state;
-    reg [ACC_BITS-1:0] impulse_ext;
-    reg [ACC_BITS-1:0] scaled_state;
-    reg [SAMPLES_PER_CLK*ACC_BITS-1:0] impulse_ext_vec_d;
-    reg [SAMPLES_PER_CLK*ACC_BITS-1:0] pulse_state_vec_d;
-    reg [4:0]           output_shift_d;
-    reg                 overflow_next;
-    reg                 pulse_overflow_next;
-    wire [4:0]          decay_shift_eff;
+    reg [ACC_BITS-1:0] decay_state;                            // Ë¥¼õ×´Ì¬£¨¿çÊ±ÖÓÖÜÆÚ±£Áô£©
+    reg [ACC_BITS-1:0] work_state;                             // Ñ­»·ÄÚµÄ¹¤×÷±äÁ¿
+    reg [ACC_BITS-1:0] next_state;                             // ÀÛ¼ÓºóµÄÖĞ¼ä×´Ì¬
+    reg [ACC_BITS-1:0] decayed_state;                          // Ë¥¼õºóµÄ×´Ì¬
+    reg [ACC_BITS-1:0] impulse_ext;                            // À©Õ¹µ½ACC_BITSÎ»µÄÂö³å
+    reg [ACC_BITS-1:0] scaled_state;                           // Ëõ·ÅºóµÄ×´Ì¬£¨ÓÃÓÚ±¥ºÍ¼ì²é£©
+    reg [SAMPLES_PER_CLK*ACC_BITS-1:0] impulse_ext_vec_d;      // À©Õ¹Âö³åÏòÁ¿£¨µ÷ÊÔÓÃ£©
+    reg [SAMPLES_PER_CLK*ACC_BITS-1:0] pulse_state_vec_d;      // Âö³å×´Ì¬ÏòÁ¿
+    reg [4:0]           output_shift_d;                        // ÑÓ³ÙµÄÊä³öËõ·ÅÁ¿
+    reg                 overflow_next;                         // Òç³ö±êÖ¾£¨×éºÏÂß¼­²úÉú£©
+    reg                 pulse_overflow_next;                   // Âö³åÒç³ö±êÖ¾
+    wire [4:0]          decay_shift_eff;                       // ÓĞĞ§Ë¥¼õÁ¿
 
-    // Pipeline registers: break carry chain between accumulate and saturation
+    // ©¤©¤ Stage 2 Á÷Ë®Ïß¼Ä´æÆ÷£º¶Ï¿ªÀÛ¼Óµ½±¥ºÍµÄ½øÎ»Á´ ©¤©¤
     reg [SAMPLES_PER_CLK*ACC_BITS-1:0] pulse_state_pipe;
     reg [4:0]                          output_shift_pipe;
     reg                                enable_pipe;
@@ -57,13 +69,23 @@ module exp_decay_core #(
 
     integer i;
 
+    // FIXED_DECAY_SHIFT ·ÇÁãÊ±¸²¸ÇÅäÖÃÖµ£¨ÓÃÓÚ¹Ì¶¨²ÎÊı³¡¾°£©
     assign decay_shift_eff = (FIXED_DECAY_SHIFT != 5'd0) ?
                              FIXED_DECAY_SHIFT : decay_shift;
 
-    // â”€â”€ Stage 1: Decay + accumulate â”€â”€
-    // Computes per-lane next_state and updates decay_state.
-    // Results are registered in pulse_state_vec_d (for debug visibility)
-    // and fed to Stage 2 via pulse_state_pipe.
+    // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+    // Stage 1£ºË¥¼õ + ÀÛ¼Ó
+    //
+    // Ã¿¸ö²ÉÑùÍ¨µÀÒÀ´ÎÖ´ĞĞ£º
+    //   1. ¼ì²é¸ÃÍ¨µÀÊÇ·ñÓĞĞÂÂö³å ¡ú À©Õ¹µ½48Î»Q36.12¸ñÊ½
+    //   2. ÀÛ¼ÓÂö³åµ½¹¤×÷×´Ì¬£¨»òÏÈË¥¼õÔÙÀÛ¼Ó£¬ÓÉ²ÎÊı¿ØÖÆ£©
+    //   3. Òç³ö¼ì²â
+    //   4. ¼ÇÂ¼Êä³öÂö³å×´Ì¬
+    //   5. Ó¦ÓÃÖ¸ÊıË¥¼õ£¬´«¸øÏÂÒ»Í¨µÀ/ÖÜÆÚ
+    //
+    // ´¦ÀíË³Ğò±£Ö¤£ºÍ¨µÀ0 ¡ú Í¨µÀ1 ¡ú ÏÂÒ»ÖÜÆÚÍ¨µÀ0 ¡ú ...
+    // ÕâĞÎ³ÉÁËÁ¬ĞøµÄÊ±¼äĞòÁĞ¡£
+    // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             decay_state    <= {ACC_BITS{1'b0}};
@@ -84,32 +106,36 @@ module exp_decay_core #(
             enable_pipe <= 1'b0;
             overflow_pipe <= 1'b0;
         end else if (enable) begin
-            work_state = decay_state;
+            work_state = decay_state;                        // ¼Ì³ĞÉÏÒ»ÖÜÆÚÄ©Î²µÄ×´Ì¬
             overflow_next = 1'b0;
 
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
+                // ©¤©¤ À©Õ¹Âö³åµ½ ACC_BITS Î»£¨º¬ FRAC_BITS Î»Ğ¡Êı£© ©¤©¤
                 if (impulse_valid_vec[i]) begin
                     impulse_ext_vec_d[i*ACC_BITS +: ACC_BITS] <=
                         {{(ACC_BITS-IMP_BITS-FRAC_BITS){1'b0}},
                          impulse_sum_vec[i*IMP_BITS +: IMP_BITS],
-                         {FRAC_BITS{1'b0}}};
+                         {FRAC_BITS{1'b0}}};                 // ×óÒÆFRAC_BITSÎ» ¡ú ¶¨µãĞ¡Êı
                 end else begin
                     impulse_ext_vec_d[i*ACC_BITS +: ACC_BITS] <= {ACC_BITS{1'b0}};
                 end
 
                 impulse_ext = impulse_ext_vec_d[i*ACC_BITS +: ACC_BITS];
+
                 if (DECAY_BEFORE_ACCUMULATE != 0) begin
+                    // Ä£Ê½1£ºÏÈË¥¼õ ¡ú ÔÙÀÛ¼ÓĞÂÂö³å£¨¸ü½Ó½üÎïÀíRC·Åµç£©
                     decayed_state = work_state - (work_state >> decay_shift_eff);
                     next_state = decayed_state + impulse_ext;
 
                     if ((ENABLE_STATE_OVERFLOW != 0) &&
                         (next_state < decayed_state)) begin
-                        overflow_next = 1'b1;
+                        overflow_next = 1'b1;               // ÀÛ¼ÓÒç³ö
                     end
 
                     pulse_state_vec_d[i*ACC_BITS +: ACC_BITS] <= next_state;
                     work_state = next_state;
                 end else begin
+                    // Ä£Ê½0£¨Ä¬ÈÏ£©£ºÏÈÀÛ¼ÓĞÂÂö³å ¡ú ÔÙË¥¼õ
                     next_state = work_state + impulse_ext;
 
                     if ((ENABLE_STATE_OVERFLOW != 0) &&
@@ -120,14 +146,14 @@ module exp_decay_core #(
                     pulse_state_vec_d[i*ACC_BITS +: ACC_BITS] <= next_state;
 
                     decayed_state = next_state - (next_state >> decay_shift_eff);
-                    work_state = decayed_state;
+                    work_state = decayed_state;              // Ë¥¼õºó´«¸øÏÂÒ»Í¨µÀ
                 end
             end
 
-            decay_state <= work_state;
+            decay_state <= work_state;                       // ±£´æ¸øÏÂÒ»Ê±ÖÓÖÜÆÚ
             output_shift_d <= output_shift;
 
-            // Pipeline register: capture stage-1 results for stage-2
+            // ©¤©¤ Á÷Ë®Ïß¼Ä´æÆ÷£º½«Stage 1½á¹û½»¸øStage 2 ©¤©¤
             pulse_state_pipe <= pulse_state_vec_d;
             output_shift_pipe <= output_shift_d;
             enable_pipe <= 1'b1;
@@ -141,10 +167,13 @@ module exp_decay_core #(
         end
     end
 
-    // â”€â”€ Stage 2: Saturation check and pulse output â”€â”€
-    // Uses registered pulse_state_pipe to break the carry chain
-    // from the accumulate loop. This isolates the 48-bit reduction-OR
-    // from the decay_state â†’ decay_state feedback path.
+    // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
+    // Stage 2£º±¥ºÍ¼ì²é + Âö³åÊä³ö
+    //
+    // ÓÃ¼Ä´æÆ÷»¯ºóµÄ pulse_state_pipe ×öÓÒÒÆËõ·ÅºÍ±¥ºÍÅĞ¶Ï¡£
+    // ½«48Î»½øÎ»Á´ºÍ±¥ºÍÅĞ¶ÏµÄ¹éÔ¼»òÂß¼­Óë Stage 1 µÄ·´À¡Â·¾¶
+    // ¸ôÀë¿ªÀ´£¬ÕâÊÇÂú×ã250MHzÊ±ĞòµÄ¹Ø¼üÉè¼Æ¡£
+    // ¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             pulse_vec      <= {(SAMPLES_PER_CLK*PULSE_BITS){1'b0}};
@@ -157,8 +186,9 @@ module exp_decay_core #(
 
             for (i = 0; i < SAMPLES_PER_CLK; i = i + 1) begin
                 scaled_state = pulse_state_pipe[i*ACC_BITS +: ACC_BITS] >> output_shift_pipe;
+                // ¼ì²é¸ßÎ»ÊÇ·ñÓĞ·ÇÁãÎ»£¨³¬³öPULSE_BITS·¶Î§£©
                 if (|scaled_state[ACC_BITS-1:PULSE_BITS]) begin
-                    pulse_vec[i*PULSE_BITS +: PULSE_BITS] <= {PULSE_BITS{1'b1}};
+                    pulse_vec[i*PULSE_BITS +: PULSE_BITS] <= {PULSE_BITS{1'b1}}; // Ç¯Î»µ½×î´ó
                     pulse_overflow_next = 1'b1;
                 end else begin
                     pulse_vec[i*PULSE_BITS +: PULSE_BITS] <= scaled_state[PULSE_BITS-1:0];

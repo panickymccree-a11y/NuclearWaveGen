@@ -13,6 +13,7 @@ foreach rtl_file [list \
     "$rtl_dir/amp_lut_multiport.v" \
     "$rtl_dir/amplitude_sampler_icdf.v" \
     "$rtl_dir/exp_decay_core.v" \
+    "$rtl_dir/exp_decay_bi_core.v" \
     "$rtl_dir/noise_baseline_core.v" \
     "$rtl_dir/mixer_saturator_simple.v" \
     "$rtl_dir/event_counters_10mcps.v" \

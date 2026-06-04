@@ -24,6 +24,7 @@ vlog -work work -sv +acc +define+SIMULATION \
     $rtl_dir/event_counters_10mcps.v \
     $rtl_dir/amplitude_sampler_icdf.v \
     $rtl_dir/exp_decay_core.v \
+    $rtl_dir/exp_decay_bi_core.v \
     $rtl_dir/noise_baseline_core.v \
     $rtl_dir/mixer_saturator_simple.v \
     $rtl_dir/nuc_event_gen_10mcps_top.v \

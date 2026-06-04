@@ -1,0 +1,78 @@
+Copyright 1986-2020 Xilinx, Inc. All Rights Reserved.
+------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2020.2 (win64) Build 3064766 Wed Nov 18 09:12:45 MST 2020
+| Date         : Wed Jun  3 11:36:13 2026
+| Host         : WIN-WPOUICNVOQZ running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -hierarchical_depth 6 -file D:/Project/NuclearWaveGen/report/ad9747_hier_util_synth.rpt
+| Design       : nuc_event_gen_10mcps_io_top
+| Device       : 7a100tfgg484-2
+| Design State : Synthesized
+------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++-------------------------------------------------------+-------------------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+|                        Instance                       |                   Module                  | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs | RAMB36 | RAMB18 | DSP Blocks |
++-------------------------------------------------------+-------------------------------------------+------------+------------+---------+------+------+--------+--------+------------+
+| nuc_event_gen_10mcps_io_top                           |                                     (top) |       3965 |       3527 |       0 |  438 | 5399 |     96 |      0 |         32 |
+|   (nuc_event_gen_10mcps_io_top)                       |                                     (top) |         69 |         69 |       0 |    0 |    6 |      0 |      0 |          0 |
+|   u_clk_wiz                                           |                                 clk_wiz_0 |          0 |          0 |       0 |    0 |    0 |      0 |      0 |          0 |
+|     inst                                              |               clk_wiz_0_clk_wiz_0_clk_wiz |          0 |          0 |       0 |    0 |    0 |      0 |      0 |          0 |
+|   u_dac1_channel                                      |                 nuc_event_gen_dac_channel |       1894 |       1675 |       0 |  219 | 2530 |     48 |      0 |         16 |
+|     u_core                                            |                  nuc_event_gen_10mcps_top |       1894 |       1675 |       0 |  219 | 2530 |     48 |      0 |         16 |
+|       (u_core)                                        |                  nuc_event_gen_10mcps_top |          0 |          0 |       0 |    0 |  252 |      0 |      0 |          0 |
+|       u_amp_lut                                       |                       amp_lut_multiport_2 |          0 |          0 |       0 |    0 |    0 |     48 |      0 |          0 |
+|         g_amp_lut[0].u_lut                            |                  amp_lut_dual_read_port_8 |          0 |          0 |       0 |    0 |    0 |     16 |      0 |          0 |
+|         g_amp_lut[1].u_lut                            |                  amp_lut_dual_read_port_9 |          0 |          0 |       0 |    0 |    0 |     16 |      0 |          0 |
+|         g_amp_lut[2].u_lut                            |                 amp_lut_dual_read_port_10 |          0 |          0 |       0 |    0 |    0 |     16 |      0 |          0 |
+|       u_amp_sampler                                   |                  amplitude_sampler_icdf_3 |        204 |        204 |       0 |    0 |  306 |      0 |      0 |          0 |
+|       u_decay                                         |                          exp_decay_core_4 |        248 |        248 |       0 |    0 |  343 |      0 |      0 |          0 |
+|       u_mixer                                         |                  mixer_saturator_simple_5 |        104 |        104 |       0 |    0 |  102 |      0 |      0 |          0 |
+|       u_rng                                           |                           rng_bank_10mcps |        349 |        349 |       0 |    0 |  256 |      0 |      0 |          0 |
+|         (u_rng)                                       |                           rng_bank_10mcps |          1 |          1 |       0 |    0 |    0 |      0 |      0 |          0 |
+|         g_amp_rng[0].u_rng_amp                        |            rng_xorshift64__parameterized1 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|         g_amp_rng[1].u_rng_amp                        |            rng_xorshift64__parameterized2 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|         g_time_rng[0].u_rng_time                      |                            rng_xorshift64 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|         g_time_rng[1].u_rng_time                      |            rng_xorshift64__parameterized0 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|       u_timebase                                      |        poisson_time_multievent__xdcDup__1 |        989 |        770 |       0 |  219 | 1271 |      0 |      0 |         16 |
+|         (u_timebase)                                  |        poisson_time_multievent__xdcDup__1 |        356 |        356 |       0 |    0 |  572 |      0 |      0 |          0 |
+|         g_multi_event_thresholds.u_div24              |       const_div_u32_seq__parameterized0_6 |        174 |        174 |       0 |    0 |  109 |      0 |      0 |          0 |
+|         g_multi_event_thresholds.u_div6               |                       const_div_u32_seq_7 |        240 |        240 |       0 |    0 |  109 |      0 |      0 |          0 |
+|         g_multi_event_thresholds.u_threshold_mult     |                           multi_threshold |        219 |          0 |       0 |  219 |  481 |      0 |      0 |         16 |
+|           (g_multi_event_thresholds.u_threshold_mult) |                           multi_threshold |          0 |          0 |       0 |    0 |    0 |      0 |      0 |          0 |
+|           U0                                          |         multi_threshold_mult_gen_v12_0_16 |        219 |          0 |       0 |  219 |  481 |      0 |      0 |         16 |
+|             (U0)                                      |         multi_threshold_mult_gen_v12_0_16 |          0 |          0 |       0 |    0 |    0 |      0 |      0 |          0 |
+|             i_mult                                    |     multi_threshold_mult_gen_v12_0_16_viv |        219 |          0 |       0 |  219 |  481 |      0 |      0 |         16 |
+|   u_dac2_channel                                      | nuc_event_gen_dac_channel__parameterized0 |       1893 |       1674 |       0 |  219 | 2530 |     48 |      0 |         16 |
+|     u_core                                            |  nuc_event_gen_10mcps_top__parameterized0 |       1893 |       1674 |       0 |  219 | 2530 |     48 |      0 |         16 |
+|       (u_core)                                        |  nuc_event_gen_10mcps_top__parameterized0 |          0 |          0 |       0 |    0 |  252 |      0 |      0 |          0 |
+|       u_amp_lut                                       |                         amp_lut_multiport |          0 |          0 |       0 |    0 |    0 |     48 |      0 |          0 |
+|         g_amp_lut[0].u_lut                            |                    amp_lut_dual_read_port |          0 |          0 |       0 |    0 |    0 |     16 |      0 |          0 |
+|         g_amp_lut[1].u_lut                            |                  amp_lut_dual_read_port_0 |          0 |          0 |       0 |    0 |    0 |     16 |      0 |          0 |
+|         g_amp_lut[2].u_lut                            |                  amp_lut_dual_read_port_1 |          0 |          0 |       0 |    0 |    0 |     16 |      0 |          0 |
+|       u_amp_sampler                                   |                    amplitude_sampler_icdf |        204 |        204 |       0 |    0 |  306 |      0 |      0 |          0 |
+|       u_decay                                         |                            exp_decay_core |        248 |        248 |       0 |    0 |  343 |      0 |      0 |          0 |
+|       u_mixer                                         |                    mixer_saturator_simple |        104 |        104 |       0 |    0 |  102 |      0 |      0 |          0 |
+|       u_rng                                           |           rng_bank_10mcps__parameterized0 |        348 |        348 |       0 |    0 |  256 |      0 |      0 |          0 |
+|         g_amp_rng[0].u_rng_amp                        |            rng_xorshift64__parameterized7 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|         g_amp_rng[1].u_rng_amp                        |            rng_xorshift64__parameterized8 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|         g_time_rng[0].u_rng_time                      |            rng_xorshift64__parameterized5 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|         g_time_rng[1].u_rng_time                      |            rng_xorshift64__parameterized6 |         87 |         87 |       0 |    0 |   64 |      0 |      0 |          0 |
+|       u_timebase                                      |                   poisson_time_multievent |        989 |        770 |       0 |  219 | 1271 |      0 |      0 |         16 |
+|         (u_timebase)                                  |                   poisson_time_multievent |        356 |        356 |       0 |    0 |  572 |      0 |      0 |          0 |
+|         g_multi_event_thresholds.u_div24              |         const_div_u32_seq__parameterized0 |        174 |        174 |       0 |    0 |  109 |      0 |      0 |          0 |
+|         g_multi_event_thresholds.u_div6               |                         const_div_u32_seq |        240 |        240 |       0 |    0 |  109 |      0 |      0 |          0 |
+|         g_multi_event_thresholds.u_threshold_mult     |                       multi_threshold_HD2 |        219 |          0 |       0 |  219 |  481 |      0 |      0 |         16 |
+|           (g_multi_event_thresholds.u_threshold_mult) |                       multi_threshold_HD2 |          0 |          0 |       0 |    0 |    0 |      0 |      0 |          0 |
+|           U0                                          |     multi_threshold_mult_gen_v12_0_16_HD3 |        219 |          0 |       0 |  219 |  481 |      0 |      0 |         16 |
+|             (U0)                                      |     multi_threshold_mult_gen_v12_0_16_HD3 |          0 |          0 |       0 |    0 |    0 |      0 |      0 |          0 |
+|             i_mult                                    | multi_threshold_mult_gen_v12_0_16_viv_HD4 |        219 |          0 |       0 |  219 |  481 |      0 |      0 |         16 |
+|   u_output_serializer                                 |                  dac_2x_output_serializer |        109 |        109 |       0 |    0 |  333 |      0 |      0 |          0 |
++-------------------------------------------------------+-------------------------------------------+------------+------------+---------+------+------+--------+--------+------------+
